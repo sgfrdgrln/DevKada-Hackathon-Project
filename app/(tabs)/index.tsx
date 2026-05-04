@@ -4,10 +4,20 @@ import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export default function HomeScreen() {
   const expenseItems = [
-    { id: '1', icon: 'restaurant-outline', title: 'Food and Snacks', subtitle: 'Expenses for food and snacks', amount: 'PHP 905.03' },
-    { id: '2', icon: 'basket-outline', title: 'Groceries', subtitle: 'Expenses for basic household supplies', amount: 'PHP 7,302.03' },
-    { id: '3', icon: 'restaurant-outline', title: 'Food and Snacks', subtitle: 'Expenses for food and snacks', amount: 'PHP 605.03' },
-    { id: '4', icon: 'basket-outline', title: 'Groceries', subtitle: 'Expenses for basic household supplies', amount: 'PHP 8,502.05' },
+    {
+      id: '1',
+      icon: 'restaurant-outline',
+      title: 'Food and Snacks',
+      subtitle: 'Expenses for food and snacks in a week',
+      amount: 'PHP 905.03',
+    },
+    {
+      id: '2',
+      icon: 'basket-outline',
+      title: 'Groceries',
+      subtitle: 'Expenses for basic household supplies',
+      amount: 'PHP 7,302.03',
+    },
   ] as const;
 
   return (
@@ -27,27 +37,26 @@ export default function HomeScreen() {
           <View style={styles.overviewLeft}>
             <Text style={styles.amountMain}>PHP 2,491.34</Text>
             <View style={styles.pillButton}>
-              <Text style={styles.pillText}>Knowledge Hub</Text>
+              <Text style={styles.pillText}>View insights</Text>
             </View>
           </View>
 
           <View style={styles.overviewRight}>
-            <View style={styles.donutWrap}>
-              <View style={styles.donutOuter}>
-                <View style={styles.donutInner} />
-              </View>
+            <View style={styles.donutOuter}>
+              <View style={styles.donutInner} />
             </View>
-            <Text style={styles.progressTitle}>Progress Report</Text>
-            <Text style={styles.progressText}>
-              You have gained 30% more{`\n`}expense in groceries in the{`\n`}last 2 weeks!
-            </Text>
           </View>
         </View>
+
+        <Text style={styles.progressTitle}>Progress Report</Text>
+        <Text style={styles.progressText}>
+          You have gained 30% more expense in groceries in the last 2 weeks!
+        </Text>
 
         <View style={styles.metricRow}>
           <View style={styles.metricCard}>
             <View style={styles.metricHeader}>
-              <Ionicons name="person-outline" size={14} color="#FFFFFF" />
+              <Ionicons name="wallet-outline" size={14} color="#FFFFFF" />
               <Ionicons name="ellipsis-horizontal" size={14} color="#8B8B95" />
             </View>
             <Text style={styles.metricLabel}>Monthly income</Text>
@@ -56,7 +65,7 @@ export default function HomeScreen() {
 
           <View style={styles.metricCard}>
             <View style={styles.metricHeader}>
-              <Ionicons name="moon-outline" size={14} color="#FFFFFF" />
+              <Ionicons name="trending-down-outline" size={14} color="#FFFFFF" />
               <Ionicons name="ellipsis-horizontal" size={14} color="#8B8B95" />
             </View>
             <Text style={styles.metricLabel}>Monthly Spending</Text>
@@ -65,14 +74,13 @@ export default function HomeScreen() {
         </View>
 
         <Text style={styles.monthLabel}>This Month</Text>
-
         {expenseItems.map((item) => (
           <View key={item.id} style={styles.expenseItem}>
             <View style={styles.expenseLeft}>
               <View style={styles.expenseIconBox}>
-                <Ionicons name={item.icon} size={14} color="#D9D9E0" />
+                <Ionicons name={item.icon} size={12} color="#F1F1F5" />
               </View>
-              <View>
+              <View style={styles.expenseTextWrap}>
                 <Text style={styles.expenseTitle}>{item.title}</Text>
                 <Text style={styles.expenseSubtitle}>{item.subtitle}</Text>
               </View>
@@ -81,10 +89,10 @@ export default function HomeScreen() {
           </View>
         ))}
 
-        <View style={styles.lastMonthWrap}>
-          <Text style={styles.lastMonthLabel}>Last Month</Text>
-          <Text style={styles.lastMonthAmount}>PHP 636.08</Text>
-          <Text style={styles.lastMonthAmount}>PHP 8,502.05</Text>
+        <View style={styles.footerBlock}>
+          <Text style={styles.monthLabel}>Last Month</Text>
+          <Text style={styles.footerAmount}>PHP 903.08</Text>
+          <Text style={styles.footerAmount}>PHP 8,302.05</Text>
           <View style={styles.pillButtonSecondary}>
             <Text style={styles.pillText}>View Expenses</Text>
           </View>
@@ -138,6 +146,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingRight: 10,
   },
+  overviewRight: {
+    width: 124,
+    alignItems: 'center',
+  },
   amountMain: {
     color: '#F4F4F6',
     fontSize: 42,
@@ -154,17 +166,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
+  pillButtonSecondary: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#723FEB',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    alignSelf: 'flex-end',
+  },
   pillText: {
     color: '#DCD3FF',
     fontSize: 10,
-  },
-  overviewRight: {
-    width: 124,
-    alignItems: 'center',
-  },
-  donutWrap: {
-    marginTop: -2,
-    marginBottom: 8,
   },
   donutOuter: {
     width: 70,
@@ -189,18 +202,19 @@ const styles = StyleSheet.create({
     color: '#723FEB',
     fontSize: 12,
     fontWeight: '600',
+    marginTop: 6,
     marginBottom: 4,
   },
   progressText: {
     color: '#C8C8D1',
-    textAlign: 'right',
     fontSize: 10,
     lineHeight: 14,
+    maxWidth: 180,
   },
   metricRow: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 10,
+    marginTop: 12,
   },
   metricCard: {
     flex: 1,
@@ -226,7 +240,7 @@ const styles = StyleSheet.create({
   },
   monthLabel: {
     marginTop: 12,
-    marginBottom: 10,
+    marginBottom: 8,
     color: '#8E8E98',
     fontSize: 18,
     fontWeight: '500',
@@ -252,6 +266,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  expenseTextWrap: {
+    flexShrink: 1,
+  },
   expenseTitle: {
     color: '#D3D3DB',
     fontSize: 12,
@@ -266,26 +283,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginLeft: 6,
   },
-  lastMonthWrap: {
+  footerBlock: {
     alignItems: 'flex-end',
-    marginTop: 10,
+    marginTop: 8,
   },
-  lastMonthLabel: {
-    color: '#8F8F98',
-    fontSize: 16,
-    marginBottom: 6,
-  },
-  lastMonthAmount: {
+  footerAmount: {
     color: '#CFCFD7',
     fontSize: 13,
     marginBottom: 2,
-  },
-  pillButtonSecondary: {
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#723FEB',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
   },
 });
