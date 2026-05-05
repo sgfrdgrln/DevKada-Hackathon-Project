@@ -1,5 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useMemo, useState } from 'react';
+import { Link } from 'expo-router';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 type FilterRange = 'daily' | 'weekly' | 'monthly';
@@ -111,7 +112,12 @@ export default function InsightsScreen() {
           </View>
         </View>
 
-        <Text style={styles.botLabel}>AI Chatbot</Text>
+        <View style={styles.botCard}>
+          <Text style={styles.botLabel}>AI Chatbot</Text>
+          <Link href="../chatbot" style={styles.botButton}>
+            <Text style={styles.botButtonText}>Open chat</Text>
+          </Link>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -236,9 +242,29 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 13,
   },
+  botCard: {
+    marginTop: 18,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: '#1E1631',
+    borderWidth: 1,
+    borderColor: '#3F3950',
+  },
   botLabel: {
     color: '#FFFFFF',
     fontSize: 17,
-    marginTop: 4,
+    marginBottom: 10,
+  },
+  botButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#723FEB',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+  },
+  botButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 13,
   },
 });
