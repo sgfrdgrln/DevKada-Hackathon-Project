@@ -19,6 +19,13 @@ type ChatMessage = {
   text: string;
 };
 
+import OpenAI from 'openai';
+
+const groq = new OpenAI({
+  apiKey: process.env.EXPO_PUBLIC_GROQ_API_KEY,
+  baseURL: 'https://api.groq.com/openai/v1',
+});
+
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
@@ -37,64 +44,46 @@ export default function ChatbotScreen() {
   };
 
   const sendMessage = async () => {
-    const text = input.trim();
-    if (!text) return;
+  const text = input.trim();
+  if (!text) return;
 
-    setError(null);
-    appendMessage('user', text);
-    setInput('');
-    setLoading(true);
+  setError(null);
+  appendMessage('user', text);
+  setInput('');
+  setLoading(true);
 
-    if (!GEMINI_API_KEY) {
-      setError('Gemini API key is not configured. Add EXPO_PUBLIC_GEMINI_API_KEY to .env.');
-      appendMessage('assistant', 'Unable to send your message because the API key is missing.');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const response = await fetch(GEMINI_ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': GEMINI_API_KEY,
+  try {
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.1-8b-instant', // fast + free tier
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful finance assistant. Help users understand expenses and budgets.',
         },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text,
-                },
-              ],
-            },
-          ],
-        }),
-      });
+        ...messages.map((m) => ({
+          role: m.role,
+          content: m.text,
+        })),
+        {
+          role: 'user',
+          content: text,
+        },
+      ],
+    });
 
-      const data = await response.json();
+    const reply =
+      completion.choices?.[0]?.message?.content ||
+      'I could not generate a reply.';
 
-      if (!response.ok) {
-        const apiError = data?.error?.message || data?.message || response.statusText;
-        throw new Error(`Gemini error ${response.status}: ${apiError}`);
-      }
-
-      const reply =
-        data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-        data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-        data?.message ||
-        'I could not generate a reply. Please try again.';
-
-      appendMessage('assistant', reply);
-    } catch (fetchError: any) {
-      console.error(fetchError);
-      const message = fetchError?.message || 'There was an error contacting the chatbot.';
-      setError(`Failed to contact Gemini: ${message}`);
-      appendMessage('assistant', 'There was an error contacting the chatbot.');
-    } finally {
-      setLoading(false);
-    }
-  };
+    appendMessage('assistant', reply);
+  } catch (err: any) {
+    console.error(err);
+    setError(err.message || 'Groq request failed');
+    appendMessage('assistant', 'There was an error contacting the chatbot.');
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <SafeAreaView style={styles.safeArea}>

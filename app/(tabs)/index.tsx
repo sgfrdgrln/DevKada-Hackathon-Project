@@ -1,8 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function HomeScreen() {
+  const [fabOpen, setFabOpen] = useState(false);
+
   const expenseItems = [
     {
       id: '1',
@@ -98,6 +102,28 @@ export default function HomeScreen() {
           </View>
         </View>
       </ScrollView>
+
+      <View pointerEvents="box-none" style={styles.fabLayer}>
+        <View pointerEvents="box-none" style={styles.fabWrap}>
+          {fabOpen ? (
+            <>
+              <Pressable style={styles.quickActionButton} onPress={() => setFabOpen(false)}>
+                <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
+              </Pressable>
+              <Pressable style={styles.quickActionButton} onPress={() => setFabOpen(false)}>
+                <Ionicons name="images-outline" size={18} color="#FFFFFF" />
+              </Pressable>
+              <Pressable style={styles.quickActionButton} onPress={() => setFabOpen(false)}>
+                <Ionicons name="calculator-outline" size={18} color="#FFFFFF" />
+              </Pressable>
+            </>
+          ) : null}
+
+          <Pressable style={styles.plusFab} onPress={() => setFabOpen((value) => !value)}>
+            <Ionicons name={fabOpen ? 'close' : 'add'} size={22} color="#FFFFFF" />
+          </Pressable>
+        </View>
+      </View>
     </SafeAreaView>
   );
 }
@@ -291,5 +317,43 @@ const styles = StyleSheet.create({
     color: '#CFCFD7',
     fontSize: 13,
     marginBottom: 2,
+  },
+  fabLayer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    paddingRight: 16,
+    paddingBottom: 96,
+  },
+  fabWrap: {
+    flexDirection: 'column',
+    alignItems: 'center',
+  },
+  plusFab: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: '#723FEB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+  },
+  quickActionButton: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: '#5E2DCC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOpacity: 0.16,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
   },
 });

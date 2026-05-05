@@ -8,6 +8,7 @@ import { useSync } from '@/hooks/useSync';
 
 export default function TabLayout() {
   useSync();
+
   return (
     <Tabs
       screenOptions={{
@@ -17,14 +18,9 @@ export default function TabLayout() {
         tabBarButton: HapticTab,
         tabBarStyle: styles.tabBar,
         tabBarLabelStyle: styles.tabLabel,
-        tabBarBackground: () => (
-          <View style={styles.tabBgWrap}>
-            <View style={styles.plusFab}>
-              <Ionicons name="add" size={22} color="#FFFFFF" />
-            </View>
-          </View>
-        ),
-      }}>
+        tabBarBackground: () => <View style={styles.tabBgWrap} />,
+      }}
+    >
       <Tabs.Screen
         name="index"
         options={{
@@ -86,16 +82,5 @@ const styles = StyleSheet.create({
   tabBgWrap: {
     flex: 1,
     backgroundColor: '#723FEB',
-  },
-  plusFab: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: -18,
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: '#723FEB',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 });
