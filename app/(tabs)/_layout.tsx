@@ -4,8 +4,10 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
+import { useSync } from '@/hooks/useSync';
 
 export default function TabLayout() {
+  useSync();
   return (
     <Tabs
       screenOptions={{

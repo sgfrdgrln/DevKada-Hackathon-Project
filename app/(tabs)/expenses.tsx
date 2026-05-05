@@ -1,38 +1,31 @@
+import { createExpense, listExpenses } from '@/services/expenseService';
+import type { Expense as DbExpense } from '@/utils/sqlite';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import type { ComponentProps } from 'react';
+import { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function ExpensesScreen() {
-  const monthItems = [
-    {
-      id: '1',
-      icon: 'restaurant-outline',
-      title: 'Food and Snacks',
-      subtitle: 'Expenses for food and snacks in a week',
-      amount: 'PHP 905.03',
-    },
-    {
-      id: '2',
-      icon: 'basket-outline',
-      title: 'Groceries',
-      subtitle: 'Expenses for basic household supplies',
-      amount: 'PHP 7,302.03',
-    },
-    {
-      id: '3',
-      icon: 'restaurant-outline',
-      title: 'Food and Snacks',
-      subtitle: 'Expenses for food and snacks in a week',
-      amount: 'PHP 930.03',
-    },
-    {
-      id: '4',
-      icon: 'basket-outline',
-      title: 'Groceries',
-      subtitle: 'Expenses for basic household supplies',
-      amount: 'PHP 5,252,656',
-    },
-  ] as const;
+  const [expenses, setExpenses] = useState<DbExpense[]>([]);
+
+  async function load() {
+    const rows = await listExpenses();
+    setExpenses(rows);
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const monthItems = expenses.map((e) => ({
+    id: e.id,
+    icon: ((e.category && e.category.toLowerCase().includes('food')) ? 'restaurant-outline' : 'basket-outline') as ComponentProps<typeof Ionicons>['name'],
+    title: e.category ?? 'Manual',
+    subtitle: e.note ?? 'Added manually',
+    amount: `PHP ${Number(e.amount).toFixed(2)}`,
+  }));
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -118,9 +111,16 @@ export default function ExpensesScreen() {
         </View>
 
         <View style={styles.actionWrap}>
-          <View style={styles.actionButton}>
+          <TouchableOpacity
+            style={styles.actionButton}
+            onPress={async () => {
+              // create a simple manual expense and refresh list
+              await createExpense({ amount: 123.45, category: 'Manual', note: 'Added from UI' });
+              void load();
+            }}
+          >
             <Text style={styles.actionText}>Add Expense Manually</Text>
-          </View>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
