@@ -1,5 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useMemo, useState } from 'react';
+import { Link } from 'expo-router';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 type FilterRange = 'daily' | 'weekly' | 'monthly';
@@ -25,8 +26,42 @@ const FILTER_OPTIONS: { label: string; value: FilterRange }[] = [
 export default function InsightsScreen() {
   const [selectedRange, setSelectedRange] = useState<FilterRange>('monthly');
 
-  const barValues = useMemo(() => BAR_VALUES_BY_RANGE[selectedRange], [selectedRange]);
-  const xAxisLabels = useMemo(() => LABELS_BY_RANGE[selectedRange], [selectedRange]);
+  const currentMonth = new Date().getMonth(); // 0-11, May = 4
+  const currentDate = new Date();
+  const dayOfWeek = currentDate.getDay(); // 0-6, Sunday = 0
+  const dateOfMonth = currentDate.getDate();
+  const weekOfMonth = Math.floor((dateOfMonth - 1) / 7); // 0-3
+
+  const barValues = useMemo(() => {
+    const values = BAR_VALUES_BY_RANGE[selectedRange];
+    if (selectedRange === 'monthly') {
+      return values.slice(0, currentMonth + 1);
+    }
+    return values;
+  }, [selectedRange, currentMonth]);
+
+  const xAxisLabels = useMemo(() => {
+    const labels = LABELS_BY_RANGE[selectedRange];
+    if (selectedRange === 'monthly') {
+      return labels.slice(0, currentMonth + 1);
+    }
+    return labels;
+  }, [selectedRange, currentMonth]);
+
+  const getCurrentIndex = () => {
+    switch (selectedRange) {
+      case 'monthly':
+        return currentMonth;
+      case 'weekly':
+        return weekOfMonth;
+      case 'daily':
+        return dayOfWeek;
+      default:
+        return -1;
+    }
+  };
+
+  const highlightIndex = getCurrentIndex();
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -37,12 +72,15 @@ export default function InsightsScreen() {
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.barChartContent}>
           <View style={styles.barChart}>
-            {barValues.map((value, index) => (
-              <View key={`${selectedRange}-${index}-${value}`} style={styles.barGroup}>
-                <View style={[styles.bar, { height: value }]} />
-                <Text style={styles.barLabel}>{xAxisLabels[index]}</Text>
-              </View>
-            ))}
+            {barValues.map((value, index) => {
+              const isHighlighted = index === highlightIndex;
+              return (
+                <View key={`${selectedRange}-${index}-${value}`} style={styles.barGroup}>
+                  <View style={[styles.bar, { height: value }, isHighlighted && styles.barHighlighted]} />
+                  <Text style={[styles.barLabel, isHighlighted && styles.barLabelHighlighted]}>{xAxisLabels[index]}</Text>
+                </View>
+              );
+            })}
           </View>
         </ScrollView>
 
@@ -74,7 +112,12 @@ export default function InsightsScreen() {
           </View>
         </View>
 
-        <Text style={styles.botLabel}>AI Chatbot</Text>
+        <View style={styles.botCard}>
+          <Text style={styles.botLabel}>AI Chatbot</Text>
+          <Link href="../chatbot" style={styles.botButton}>
+            <Text style={styles.botButtonText}>Open chat</Text>
+          </Link>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -111,7 +154,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   barGroup: {
-    width: 44,
+    width: 40,
     alignItems: 'center',
   },
   bar: {
@@ -119,10 +162,22 @@ const styles = StyleSheet.create({
     borderRadius: 1,
     backgroundColor: '#723FEB',
   },
+  barHighlighted: {
+    backgroundColor: '#E0B0FF',
+    shadowColor: '#723FEB',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    elevation: 8,
+  },
   barLabel: {
     color: '#8B8B95',
     fontSize: 9,
     marginTop: 6,
+  },
+  barLabelHighlighted: {
+    color: '#E0B0FF',
+    fontWeight: '600',
   },
   chipRow: {
     flexDirection: 'row',
@@ -187,9 +242,29 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 13,
   },
+  botCard: {
+    marginTop: 18,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: '#1E1631',
+    borderWidth: 1,
+    borderColor: '#3F3950',
+  },
   botLabel: {
     color: '#FFFFFF',
     fontSize: 17,
-    marginTop: 4,
+    marginBottom: 10,
+  },
+  botButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#723FEB',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+  },
+  botButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 13,
   },
 });
