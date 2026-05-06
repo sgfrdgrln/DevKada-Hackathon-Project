@@ -149,9 +149,11 @@ export default function HomeScreen() {
               <Pressable style={styles.quickActionButton} onPress={() => setFabOpen(false)}>
                 <Ionicons name="images-outline" size={18} color="#FFFFFF" />
               </Pressable>
-              <Pressable style={styles.quickActionButton} onPress={() => setFabOpen(false)}>
-                <Ionicons name="calculator-outline" size={18} color="#FFFFFF" />
-              </Pressable>
+              <Link href="/calculator" asChild>
+                <Pressable style={styles.quickActionButton} onPress={() => setFabOpen(false)}>
+                  <Ionicons name="calculator-outline" size={18} color="#FFFFFF" />
+                </Pressable>
+              </Link>
             </>
           ) : null}
 
