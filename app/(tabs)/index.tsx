@@ -3,9 +3,14 @@ import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Link } from 'expo-router';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function HomeScreen() {
   const [fabOpen, setFabOpen] = useState(false);
+  const theme = useColorScheme() ?? 'light';
+  const activeColors = Colors[theme];
 
   const expenseItems = [
     {
@@ -42,93 +47,96 @@ export default function HomeScreen() {
   ] as const;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: activeColors.background }]}> 
+      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <View style={styles.avatarCircle}>
-            <Ionicons name="person-outline" size={16} color="#FFFFFF" />
+            <Ionicons name="person-outline" size={16} color={activeColors.background === '#fff' ? '#000' : '#FFF'} />
           </View>
-          <Text style={styles.heading}>What&apos;s new?</Text>
+          <Text style={[styles.heading, { color: activeColors.tint }]}>What&apos;s new?</Text>
         </View>
 
-        <Text style={styles.sectionLabel}>Expenses for this week</Text>
+        <Text style={[styles.sectionLabel, { color: activeColors.icon }]}>Expenses for this week</Text>
 
         <View style={styles.overviewRow}>
           <View style={styles.overviewLeft}>
-            <Text style={styles.amountMain}>PHP 2,491.34</Text>
-            <View style={styles.pillButton}>
-              <Text style={styles.pillText}>View insights</Text>
-            </View>
+            <Text style={[styles.amountMain, { color: activeColors.text }]}>PHP 2,491.34</Text>
+            <Link href="/explore" asChild>
+              <Pressable style={[styles.pillButton, { borderColor: activeColors.tint }]}> 
+                <Text style={[styles.pillText, { color: activeColors.tint }]}>View insights</Text>
+              </Pressable>
+            </Link>
           </View>
-
           <View style={styles.overviewRight}>
             <View style={styles.donutOuter}>
-              <View style={styles.donutInner} />
+              <View style={[styles.donutInner, { backgroundColor: activeColors.background }]} />
             </View>
           </View>
         </View>
 
-        <Text style={styles.progressTitle}>Progress Report</Text>
-        <Text style={styles.progressText}>
+        <Text style={[styles.progressTitle, { color: activeColors.text }]}>Progress Report</Text>
+        <Text style={[styles.progressText, { color: activeColors.icon }]}> 
           You have gained 30% more expense in groceries in the last 2 weeks!
         </Text>
 
         <View style={styles.metricRow}>
-          <View style={styles.metricCard}>
+          <View style={[styles.metricCard, { backgroundColor: theme === 'light' ? '#F7F8FA' : '#111015' }]}> 
             <View style={styles.metricHeader}>
-              <Ionicons name="wallet-outline" size={14} color="#FFFFFF" />
-              <Ionicons name="ellipsis-horizontal" size={14} color="#8B8B95" />
+              <Ionicons name="wallet-outline" size={14} color={activeColors.tint} />
+              <Ionicons name="ellipsis-horizontal" size={14} color={activeColors.icon} />
             </View>
-            <Text style={styles.metricLabel}>Monthly income</Text>
-            <Text style={styles.metricAmount}>PHP 14,305.33</Text>
+            <Text style={[styles.metricLabel, { color: activeColors.icon }]}>Monthly income</Text>
+            <Text style={[styles.metricAmount, { color: activeColors.text }]}>PHP 14,305.33</Text>
           </View>
 
-          <View style={styles.metricCard}>
+          <View style={[styles.metricCard, { backgroundColor: theme === 'light' ? '#F7F8FA' : '#111015' }]}> 
             <View style={styles.metricHeader}>
-              <Ionicons name="trending-down-outline" size={14} color="#FFFFFF" />
-              <Ionicons name="ellipsis-horizontal" size={14} color="#8B8B95" />
+              <Ionicons name="trending-down-outline" size={14} color={activeColors.tint} />
+              <Ionicons name="ellipsis-horizontal" size={14} color={activeColors.icon} />
             </View>
-            <Text style={styles.metricLabel}>Monthly Spending</Text>
-            <Text style={styles.metricAmount}>PHP 8,305.33</Text>
+            <Text style={[styles.metricLabel, { color: activeColors.icon }]}>Monthly Spending</Text>
+            <Text style={[styles.metricAmount, { color: activeColors.text }]}>PHP 8,305.33</Text>
           </View>
         </View>
 
-        <Text style={styles.monthLabel}>This Month</Text>
+        <Text style={[styles.monthLabel, { color: activeColors.icon }]}>This Month</Text>
         {expenseItems.map((item) => (
           <View key={item.id} style={styles.expenseItem}>
             <View style={styles.expenseLeft}>
-              <View style={styles.expenseIconBox}>
-                <Ionicons name={item.icon} size={12} color="#F1F1F5" />
+              <View style={[styles.expenseIconBox, { borderColor: activeColors.icon }]}> 
+                <Ionicons name={item.icon} size={12} color={activeColors.tint} />
               </View>
               <View style={styles.expenseTextWrap}>
-                <Text style={styles.expenseTitle}>{item.title}</Text>
-                <Text style={styles.expenseSubtitle}>{item.subtitle}</Text>
+                <Text style={[styles.expenseTitle, { color: activeColors.text }]}>{item.title}</Text>
+                <Text style={[styles.expenseSubtitle, { color: activeColors.icon }]}>{item.subtitle}</Text>
               </View>
             </View>
-            <Text style={styles.expenseAmount}>{item.amount}</Text>
+            <Text style={[styles.expenseAmount, { color: activeColors.text }]}>{item.amount}</Text>
           </View>
         ))}
 
-        <Text style={styles.monthLabel}>Last Month</Text>
+        <Text style={[styles.monthLabel, { color: activeColors.icon }]}>Last Month</Text>
         {lastMonthItems.map((item) => (
           <View key={item.id} style={styles.expenseItem}>
             <View style={styles.expenseLeft}>
-              <View style={styles.expenseIconBox}>
-                <Ionicons name={item.icon} size={12} color="#F1F1F5" />
+              <View style={[styles.expenseIconBox, { backgroundColor: theme === 'light' ? '#E8EAF6' : '#2A253A', borderColor: activeColors.icon }]}> 
+                <Ionicons name={item.icon} size={12} color={activeColors.tint} />
               </View>
               <View style={styles.expenseTextWrap}>
-                <Text style={styles.expenseTitle}>{item.title}</Text>
-                <Text style={styles.expenseSubtitle}>{item.subtitle}</Text>
+                <Text style={[styles.expenseTitle, { color: activeColors.text }]}>{item.title}</Text>
+                <Text style={[styles.expenseSubtitle, { color: activeColors.icon }]}>{item.subtitle}</Text>
               </View>
             </View>
-            <Text style={styles.expenseAmount}>{item.amount}</Text>
+            <Text style={[styles.expenseAmount, { color: activeColors.text }]}>{item.amount}</Text>
           </View>
         ))}
 
-        <View style={styles.pillButtonSecondary}>
-          <Text style={styles.pillText}>View Expenses</Text>
-        </View>
+        <Link href="/expenses" asChild>
+          <Pressable style={[styles.pillButtonSecondary, { borderColor: activeColors.tint }]}> 
+            <Text style={[styles.pillText, { color: activeColors.tint }]}>View Expenses</Text>
+          </Pressable>
+        </Link>
       </ScrollView>
 
       <View pointerEvents="box-none" style={styles.fabLayer}>

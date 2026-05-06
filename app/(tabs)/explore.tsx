@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react';
 import { Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type FilterRange = 'daily' | 'weekly' | 'monthly';
 
@@ -26,6 +28,8 @@ const FILTER_OPTIONS: { label: string; value: FilterRange }[] = [
 
 export default function InsightsScreen() {
   const [selectedRange, setSelectedRange] = useState<FilterRange>('monthly');
+  const theme = useColorScheme() ?? 'light';
+  const activeColors = Colors[theme];
 
   const currentMonth = new Date().getMonth(); // 0-11, May = 4
   const currentDate = new Date();
@@ -65,11 +69,11 @@ export default function InsightsScreen() {
   const highlightIndex = getCurrentIndex();
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: activeColors.background }]}> 
+      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.heading}>Insights</Text>
-        <Text style={styles.subtitle}>You have gained 30% more expense in groceries in this month!</Text>
+        <Text style={[styles.heading, { color: activeColors.tint }]}>Insights</Text>
+        <Text style={[styles.subtitle, { color: activeColors.icon }]}>You have gained 30% more expense in groceries in this month!</Text>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.barChartContent}>
           <View style={styles.barChart}>
@@ -77,8 +81,8 @@ export default function InsightsScreen() {
               const isHighlighted = index === highlightIndex;
               return (
                 <View key={`${selectedRange}-${index}-${value}`} style={styles.barGroup}>
-                  <View style={[styles.bar, { height: value }, isHighlighted && styles.barHighlighted]} />
-                  <Text style={[styles.barLabel, isHighlighted && styles.barLabelHighlighted]}>{xAxisLabels[index]}</Text>
+                  <View style={[styles.bar, { height: value, backgroundColor: isHighlighted ? activeColors.tint : theme === 'light' ? '#C4C4D1' : '#4B4A5A' }, isHighlighted && styles.barHighlighted]} />
+                  <Text style={[styles.barLabel, isHighlighted && styles.barLabelHighlighted, { color: isHighlighted ? activeColors.tint : activeColors.icon }]}>{xAxisLabels[index]}</Text>
                 </View>
               );
             })}
@@ -93,8 +97,11 @@ export default function InsightsScreen() {
               <Pressable
                 key={option.value}
                 onPress={() => setSelectedRange(option.value)}
-                style={[styles.chip, isActive && styles.chipActive]}>
-                <Text style={[styles.chipText, isActive && styles.chipTextActive]}>{option.label}</Text>
+                style={[
+                  styles.chip,
+                  { backgroundColor: isActive ? activeColors.tint : theme === 'light' ? '#F0F0F3' : '#1B1D26', borderColor: isActive ? activeColors.tint : '#3F3950' },
+                ]}>
+                <Text style={[styles.chipText, isActive ? { color: activeColors.background, fontWeight: '600' } : { color: activeColors.icon }]}>{option.label}</Text>
               </Pressable>
             );
           })}

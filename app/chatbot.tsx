@@ -12,6 +12,8 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 type ChatMessage = {
   id: string;
@@ -30,6 +32,8 @@ const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 export default function ChatbotScreen() {
+  const theme = useColorScheme() ?? 'light';
+  const activeColors = Colors[theme];
   const [messages, setMessages] = useState<ChatMessage[]>([
     { id: 'assistant-1', role: 'assistant', text: 'Hi! Ask me anything about your expenses or budgets.' },
   ]);
@@ -110,16 +114,16 @@ export default function ChatbotScreen() {
 };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: activeColors.background }]}> 
+      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
       <KeyboardAvoidingView
         style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 70 : 0}
       >
         <View style={styles.header}>
-          <Text style={styles.title}>AI Chatbot</Text>
-          <Text style={styles.subtitle}>Ask about spending, budgets, or your finance insights.</Text>
+          <Text style={[styles.title, { color: activeColors.text }]}>AI Chatbot</Text>
+          <Text style={[styles.subtitle, { color: activeColors.icon }]}>Ask about spending, budgets, or your finance insights.</Text>
         </View>
 
         <ScrollView style={styles.messages} contentContainerStyle={styles.messagesContent}>
@@ -132,23 +136,37 @@ export default function ChatbotScreen() {
               key={message.id}
               style={[
                 styles.messageBubble,
-                message.role === 'assistant' ? styles.botBubble : styles.userBubble,
+                message.role === 'assistant'
+                  ? [
+                      styles.botBubble,
+                      {
+                        backgroundColor: theme === 'light' ? '#F0F3FF' : '#21163C',
+                        borderColor: theme === 'light' ? '#CBD5E1' : '#39324A',
+                      },
+                    ]
+                  : [
+                      styles.userBubble,
+                      {
+                        backgroundColor: theme === 'light' ? '#D9E0FF' : '#3C1F6A',
+                        borderColor: theme === 'light' ? '#C7D2FE' : '#332655',
+                      },
+                    ],
               ]}
             >
-              <Text style={styles.messageText}>{message.text}</Text>
+              <Text style={[styles.messageText, { color: theme === 'light' ? '#111827' : activeColors.text }]}>{message.text}</Text>
             </View>
           ))}
         </ScrollView>
 
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {error ? <Text style={[styles.errorText, { color: theme === 'light' ? '#B00020' : '#FF7D7D' }]}>{error}</Text> : null}
 
         <View style={styles.inputRow}>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: theme === 'light' ? '#F2F4F7' : '#1D1433', color: activeColors.text, borderColor: theme === 'light' ? '#D6D9E2' : '#3F3B4B' }]}
             value={input}
             onChangeText={setInput}
             placeholder="Type a question..."
-            placeholderTextColor="#999"
+            placeholderTextColor={theme === 'light' ? '#9A9AA8' : '#999'}
             editable={!loading}
             multiline
           />
@@ -214,7 +232,6 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   errorText: {
-    color: '#FF6B6B',
     marginBottom: 8,
     textAlign: 'center',
   },

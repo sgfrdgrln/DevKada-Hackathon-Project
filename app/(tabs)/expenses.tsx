@@ -6,9 +6,13 @@ import type { ComponentProps } from 'react';
 import { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function ExpensesScreen() {
   const [expenses, setExpenses] = useState<DbExpense[]>([]);
+  const theme = useColorScheme() ?? 'light';
+  const activeColors = Colors[theme];
 
   async function load() {
     const rows = await listExpenses();
@@ -28,85 +32,85 @@ export default function ExpensesScreen() {
   }));
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="light" />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: activeColors.background }]}> 
+      <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionLabel}>Expenses for this week</Text>
+        <Text style={[styles.sectionLabel, { color: activeColors.icon }]}>Expenses for this week</Text>
 
         <View style={styles.overviewRow}>
           <View style={styles.overviewLeft}>
-            <Text style={styles.amountMain}>PHP 2,491.34</Text>
-            <View style={styles.pillButton}>
-              <Text style={styles.pillText}>View insights</Text>
+            <Text style={[styles.amountMain, { color: activeColors.text }]}>PHP 2,491.34</Text>
+            <View style={[styles.pillButton, { borderColor: activeColors.tint }]}> 
+              <Text style={[styles.pillText, { color: activeColors.tint }]}>View insights</Text>
             </View>
           </View>
 
           <View style={styles.donutOuter}>
-            <View style={styles.donutInner} />
+            <View style={[styles.donutInner, { backgroundColor: activeColors.background }]} />
           </View>
         </View>
 
         <View style={styles.monthBlock}>
-          <Text style={styles.monthLabel}>This Month</Text>
+          <Text style={[styles.monthLabel, { color: activeColors.icon }]}>This Month</Text>
           {monthItems.slice(0, 2).map((item) => (
             <View key={item.id} style={styles.expenseItem}>
               <View style={styles.expenseLeft}>
-                <View style={styles.expenseIconBox}>
-                  <Ionicons name={item.icon} size={12} color="#F1F1F5" />
+                <View style={[styles.expenseIconBox, { backgroundColor: theme === 'light' ? '#E8EAF6' : '#2A253A', borderColor: activeColors.icon }]}> 
+                  <Ionicons name={item.icon} size={12} color={activeColors.tint} />
                 </View>
                 <View style={styles.expenseTextWrap}>
-                  <Text style={styles.expenseTitle}>{item.title}</Text>
-                  <Text style={styles.expenseSubtitle}>{item.subtitle}</Text>
+                  <Text style={[styles.expenseTitle, { color: activeColors.text }]}>{item.title}</Text>
+                  <Text style={[styles.expenseSubtitle, { color: activeColors.icon }]}>{item.subtitle}</Text>
                 </View>
               </View>
-              <Text style={styles.expenseAmount}>{item.amount}</Text>
+              <Text style={[styles.expenseAmount, { color: activeColors.text }]}>{item.amount}</Text>
             </View>
           ))}
         </View>
 
         <View style={styles.rightAlignedBlock}>
-          <Text style={styles.rightMonthLabel}>Last Month</Text>
+          <Text style={[styles.rightMonthLabel, { color: activeColors.icon }]}>Last Month</Text>
           {monthItems.slice(2, 4).map((item) => (
             <View key={item.id} style={styles.expenseItem}>
               <View style={styles.expenseLeft}>
-                <View style={styles.expenseIconBox}>
-                  <Ionicons name={item.icon} size={12} color="#F1F1F5" />
+                <View style={[styles.expenseIconBox, { backgroundColor: theme === 'light' ? '#E8EAF6' : '#2A253A', borderColor: activeColors.icon }]}> 
+                  <Ionicons name={item.icon} size={12} color={activeColors.tint} />
                 </View>
                 <View style={styles.expenseTextWrap}>
-                  <Text style={styles.expenseTitle}>{item.title}</Text>
-                  <Text style={styles.expenseSubtitle}>{item.subtitle}</Text>
+                  <Text style={[styles.expenseTitle, { color: activeColors.text }]}>{item.title}</Text>
+                  <Text style={[styles.expenseSubtitle, { color: activeColors.icon }]}>{item.subtitle}</Text>
                 </View>
               </View>
-              <Text style={styles.expenseAmount}>{item.amount}</Text>
+              <Text style={[styles.expenseAmount, { color: activeColors.text }]}>{item.amount}</Text>
             </View>
           ))}
         </View>
 
         <View style={styles.monthBlock}>
-          <Text style={styles.monthLabel}>Last 2 months</Text>
+          <Text style={[styles.monthLabel, { color: activeColors.icon }]}>Last 2 months</Text>
           <View style={styles.expenseItem}>
             <View style={styles.expenseLeft}>
-              <View style={styles.expenseIconBox}>
-                <Ionicons name="restaurant-outline" size={12} color="#F1F1F5" />
+              <View style={[styles.expenseIconBox, { backgroundColor: theme === 'light' ? '#E8EAF6' : '#2A253A', borderColor: activeColors.icon }]}> 
+                <Ionicons name="restaurant-outline" size={12} color={activeColors.tint} />
               </View>
               <View style={styles.expenseTextWrap}>
-                <Text style={styles.expenseTitle}>Food and Snacks</Text>
-                <Text style={styles.expenseSubtitle}>Expenses for food and snacks in a week</Text>
+                <Text style={[styles.expenseTitle, { color: activeColors.text }]}>Food and Snacks</Text>
+                <Text style={[styles.expenseSubtitle, { color: activeColors.icon }]}>Expenses for food and snacks in a week</Text>
               </View>
             </View>
-            <Text style={styles.expenseAmount}>PHP 930.03</Text>
+            <Text style={[styles.expenseAmount, { color: activeColors.text }]}>PHP 930.03</Text>
           </View>
           <View style={styles.expenseItem}>
             <View style={styles.expenseLeft}>
-              <View style={styles.expenseIconBox}>
-                <Ionicons name="basket-outline" size={12} color="#F1F1F5" />
+              <View style={[styles.expenseIconBox, { backgroundColor: theme === 'light' ? '#E8EAF6' : '#2A253A', borderColor: activeColors.icon }]}> 
+                <Ionicons name="basket-outline" size={12} color={activeColors.tint} />
               </View>
               <View style={styles.expenseTextWrap}>
-                <Text style={styles.expenseTitle}>Groceries</Text>
-                <Text style={styles.expenseSubtitle}>Expenses for basic household supplies</Text>
+                <Text style={[styles.expenseTitle, { color: activeColors.text }]}>Groceries</Text>
+                <Text style={[styles.expenseSubtitle, { color: activeColors.icon }]}>Expenses for basic household supplies</Text>
               </View>
             </View>
-            <Text style={styles.expenseAmount}>PHP 5,252,656</Text>
+            <Text style={[styles.expenseAmount, { color: activeColors.text }]}>PHP 5,252,656</Text>
           </View>
         </View>
       </ScrollView>
