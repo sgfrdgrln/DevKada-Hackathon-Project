@@ -1,14 +1,19 @@
-import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Link } from 'expo-router';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { extractReceiptData } from '@/services/extractService';
+import { Ionicons } from '@expo/vector-icons';
+import { Camera } from 'expo-camera';
+import * as ImagePicker from 'expo-image-picker';
+import { Link, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function HomeScreen() {
   const [fabOpen, setFabOpen] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
+  const router = useRouter();
   const theme = useColorScheme() ?? 'light';
   const activeColors = Colors[theme];
 
@@ -45,6 +50,63 @@ export default function HomeScreen() {
       amount: 'PHP 8,302.05',
     },
   ] as const;
+
+  function openExpensesModal(amount: string) {
+    setFabOpen(false);
+    router.push({ pathname: '/expenses', params: { openModal: '1', amount } });
+  }
+
+  async function processReceipt(imageUri: string) {
+    setIsExtracting(true);
+
+    try {
+      const result = await extractReceiptData(imageUri);
+      const total = typeof result.total_amount === 'number' ? result.total_amount : null;
+      const formatted = total !== null && Number.isFinite(total) ? total.toFixed(2) : '';
+      openExpensesModal(formatted);
+    } catch (err) {
+      console.warn('receipt extraction failed', err);
+      openExpensesModal('');
+    } finally {
+      setIsExtracting(false);
+    }
+  }
+
+  async function openCamera() {
+    if (isExtracting) return;
+    const permission = await Camera.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      openExpensesModal('');
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ["images"],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      await processReceipt(result.assets[0].uri);
+    }
+  }
+
+  async function pickImage() {
+    if (isExtracting) return;
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      openExpensesModal('');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      await processReceipt(result.assets[0].uri);
+    }
+  }
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: activeColors.background }]}> 
@@ -139,14 +201,36 @@ export default function HomeScreen() {
         </Link>
       </ScrollView>
 
+      {isExtracting ? (
+        <View style={styles.extractingOverlay}>
+          <View
+            style={[
+              styles.extractingCard,
+              { backgroundColor: theme === 'light' ? '#FFFFFF' : '#1B1B22' },
+            ]}
+          >
+            <ActivityIndicator color={activeColors.tint} />
+            <Text style={[styles.extractingText, { color: activeColors.text }]}>Extracting receipt...</Text>
+          </View>
+        </View>
+      ) : null}
+
       <View pointerEvents="box-none" style={styles.fabLayer}>
         <View pointerEvents="box-none" style={styles.fabWrap}>
           {fabOpen ? (
             <>
-              <Pressable style={styles.quickActionButton} onPress={() => setFabOpen(false)}>
+              <Pressable
+                style={[styles.quickActionButton, isExtracting && styles.actionButtonDisabled]}
+                onPress={openCamera}
+                disabled={isExtracting}
+              >
                 <Ionicons name="scan-outline" size={18} color="#FFFFFF" />
               </Pressable>
-              <Pressable style={styles.quickActionButton} onPress={() => setFabOpen(false)}>
+              <Pressable
+                style={[styles.quickActionButton, isExtracting && styles.actionButtonDisabled]}
+                onPress={pickImage}
+                disabled={isExtracting}
+              >
                 <Ionicons name="images-outline" size={18} color="#FFFFFF" />
               </Pressable>
               <Link href="/calculator" asChild>
@@ -384,5 +468,24 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.16,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
+  },
+  actionButtonDisabled: {
+    opacity: 0.6,
+  },
+  extractingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  extractingCard: {
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 16,
+    alignItems: 'center',
+    gap: 10,
+  },
+  extractingText: {
+    fontSize: 12,
   },
 });

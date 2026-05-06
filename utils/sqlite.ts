@@ -1,7 +1,5 @@
 import * as SQLite from 'expo-sqlite';
 
-const db = SQLite.openDatabaseSync('expenses.db');
-
 export type Expense = {
   id: string;
   user_id: string;
@@ -13,12 +11,11 @@ export type Expense = {
   is_synced: 0 | 1;
 };
 
-function runSql<T = any>(sql: string, params: any[] = []): Promise<T> {
-  return db.runAsync(sql, params) as Promise<T>;
-}
+let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+let initPromise: Promise<void> | null = null;
 
-export async function initDatabase(): Promise<void> {
-  await runSql(
+async function initDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
+  await db.execAsync(
     `CREATE TABLE IF NOT EXISTS expenses (
       id TEXT PRIMARY KEY,
       user_id TEXT,
@@ -30,6 +27,28 @@ export async function initDatabase(): Promise<void> {
       is_synced INTEGER DEFAULT 0
     );`
   );
+}
+
+export async function getDb(): Promise<SQLite.SQLiteDatabase> {
+  try {
+    if (!dbPromise) {
+      dbPromise = SQLite.openDatabaseAsync('expenses.db');
+    }
+    const db = await dbPromise;
+    if (!initPromise) {
+      initPromise = initDatabase(db);
+    }
+    await initPromise;
+    return db;
+  } catch (error) {
+    dbPromise = null;
+    initPromise = null;
+    throw error;
+  }
+}
+
+function runSql<T = any>(sql: string, params: any[] = []): Promise<T> {
+  return getDb().then((db) => db.runAsync(sql, params) as Promise<T>);
 }
 
 export async function createExpense(expense: Omit<Expense, 'is_synced'>) {
@@ -52,8 +71,9 @@ export async function createExpense(expense: Omit<Expense, 'is_synced'>) {
 }
 
 export async function getUnsyncedExpenses(): Promise<Expense[]> {
-  return await db.getAllAsync<Expense>(
-    "SELECT * FROM expenses WHERE is_synced = 0"
+  const db = await getDb();
+  return db.getAllAsync<Expense>(
+    'SELECT * FROM expenses WHERE is_synced = 0'
   );
 }
 
@@ -63,12 +83,12 @@ export async function markAsSynced(id: string) {
 
 export async function upsertExpenses(remote: Partial<Expense>[]) {
   // For each remote expense, insert or update depending on updated_at
+  const db = await getDb();
   for (const r of remote) {
     if (!r.id) continue;
-    const existingRes = await runSql<any>('SELECT updated_at FROM expenses WHERE id = ?', [r.id]);
     const existing = await db.getFirstAsync<{ updated_at: string }>(
-    'SELECT updated_at FROM expenses WHERE id = ?',
-    [r.id]
+      'SELECT updated_at FROM expenses WHERE id = ?',
+      [r.id]
     );
 
     const remoteUpdated = r.updated_at ?? new Date().toISOString();
@@ -110,6 +130,7 @@ export async function upsertExpenses(remote: Partial<Expense>[]) {
 }
 
 export async function getAllExpenses(): Promise<Expense[]> {
+  const db = await getDb();
   const rows = await db.getAllAsync<Expense>(
     'SELECT * FROM expenses ORDER BY created_at DESC'
   );
@@ -117,6 +138,7 @@ export async function getAllExpenses(): Promise<Expense[]> {
 }
 
 export async function getExpenseById(id: string): Promise<Expense | null> {
+  const db = await getDb();
   const row = await db.getFirstAsync<Expense>('SELECT * FROM expenses WHERE id = ?', [id]);
   return row ?? null;
 }
@@ -150,4 +172,8 @@ export async function updateExpenseLocal(id: string, changes: Partial<Expense>) 
 
 export async function deleteExpenseLocal(id: string) {
   await runSql('DELETE FROM expenses WHERE id = ?', [id]);
+}
+
+export async function clearExpenses() {
+  await runSql('DELETE FROM expenses');
 }

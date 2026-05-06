@@ -1,26 +1,14 @@
-import {
-    createExpense as createLocalExpense,
-    Expense,
-    getUnsyncedExpenses,
-    initDatabase,
-    markAsSynced,
-    upsertExpenses,
-} from '@/utils/sqlite';
+import { Expense, getUnsyncedExpenses, initDatabase, markAsSynced, upsertExpenses } from '@/utils/sqlite';
 import { supabase } from '@/utils/supabase';
+import NetInfo from '@react-native-community/netinfo';
 import 'react-native-get-random-values';
-import { v4 as uuidv4 } from 'uuid';
 
-export async function signInAnonymously(): Promise<string | null> {
-  try {
-    const { data, error } = await supabase.auth.signInAnonymously?.();
-    if (error) throw error;
-    // v2 return shape may vary; try data?.user or data?.session
-    const user = (data as any)?.user ?? (data as any)?.session?.user;
-    return user?.id ?? null;
-  } catch (err) {
-    console.warn('Anonymous sign-in failed', err);
-    return null;
+async function getAuthenticatedUserId(): Promise<string | null> {
+  const { data, error } = await supabase.auth.getUser();
+  if (error) {
+    console.warn('getUser failed', error);
   }
+  return data.user?.id ?? null;
 }
 
 export async function pushUnsyncedExpenses(userId: string) {
@@ -31,7 +19,7 @@ export async function pushUnsyncedExpenses(userId: string) {
     // ensure each has user_id
     const rows = unsynced.map((r) => ({
       id: r.id,
-      user_id: r.user_id ?? userId,
+      user_id: userId,
       amount: r.amount,
       category: r.category,
       note: r.note,
@@ -51,7 +39,7 @@ export async function pushUnsyncedExpenses(userId: string) {
 
 export async function pullExpenses(userId: string) {
   try {
-    const { data, error } = await supabase.from<Expense>('expenses').select('*').eq('user_id', userId);
+    const { data, error } = await supabase.from('expenses').select('*').eq('user_id', userId);
     if (error) {
       // If the expenses table isn't present on the Supabase project, avoid noisy stack traces.
       if ((error as any)?.code === 'PGRST205') {
@@ -69,46 +57,26 @@ export async function pullExpenses(userId: string) {
   }
 }
 
-export async function syncExpenses(userId?: string) {
+export async function syncExpenses() {
   try {
+    const netState = await NetInfo.fetch();
+    if (!netState.isConnected) {
+      return { status: 'offline' as const };
+    }
+
     await initDatabase();
 
-    let uid = userId;
-    if (!uid) {
-      const u = await signInAnonymously();
-      uid = u ?? undefined;
+    const userId = await getAuthenticatedUserId();
+    if (!userId) {
+      return { status: 'unauthenticated' as const };
     }
-    if (!uid) return;
 
-    await pushUnsyncedExpenses(uid);
-    await pullExpenses(uid);
+    await pushUnsyncedExpenses(userId);
+    await pullExpenses(userId);
+
+    return { status: 'success' as const };
   } catch (err) {
     console.warn('syncExpenses failed', err);
+    return { status: 'error' as const };
   }
-}
-
-export async function createLocalAndMaybePush(payload: {
-  amount: number;
-  category?: string;
-  note?: string;
-  user_id: string;
-}) {
-  const id = uuidv4();
-  const now = new Date().toISOString();
-
-  await createLocalExpense({
-    id,
-    user_id: payload.user_id,
-    amount: payload.amount,
-    category: payload.category ?? null,
-    note: payload.note ?? null,
-    created_at: now,
-    updated_at: now,
-    is_synced: 0,
-  } as any);
-
-  // fire-and-forget push
-  setTimeout(() => void pushUnsyncedExpenses(payload.user_id), 0);
-
-  return id;
 }

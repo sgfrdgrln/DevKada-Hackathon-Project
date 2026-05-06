@@ -1,5 +1,10 @@
+import { syncExpenses } from '@/services/syncService';
+import { useAppTheme } from '@/theme/ThemeContext';
+import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   Image,
   SafeAreaView,
   StyleSheet,
@@ -9,16 +14,46 @@ import {
   View,
 } from 'react-native';
 import { Colors } from '../../constants/theme';
-import { useAppTheme } from '@/theme/ThemeContext';
 
-const logoutIcon = require('../../assets/famicons-logout.png');
 const settingsIcon = require('../../assets/famicons-settings.png');
 
 export default function ProfileScreen() {
   const [name, setName] = useState('User');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const { theme, setTheme } = useAppTheme();
   const activeColors = Colors[theme];
   const nextTheme = theme === 'light' ? 'dark' : 'light';
+
+  const handleSync = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+
+    try {
+      const result = await syncExpenses();
+      if (result.status === 'offline') {
+        Alert.alert('No internet connection', 'Connect to the internet and try again.');
+        return;
+      }
+      if (result.status === 'unauthenticated') {
+        Alert.alert('Sign in required', 'Please sign in before syncing.');
+        return;
+      }
+      if (result.status === 'success') {
+        const now = new Date();
+        setLastSyncedAt(now);
+        Alert.alert('Sync successful', 'Backup complete.');
+        return;
+      }
+      Alert.alert('Sync failed', 'Please try again.');
+    } catch (error) {
+      console.warn('Sync failed', error);
+      Alert.alert('Sync failed', 'Please try again.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: activeColors.background }]}> 
@@ -52,13 +87,25 @@ export default function ProfileScreen() {
             </View>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.option} activeOpacity={0.7} onPress={() => {}}>
-            <View style={[styles.iconBox, { backgroundColor: theme === 'light' ? '#FFDCDC' : '#2E1E20' }]}> 
-              <Image source={logoutIcon} style={styles.icon} />
+          <TouchableOpacity
+            style={[styles.option, isSyncing && styles.optionDisabled]}
+            activeOpacity={0.7}
+            onPress={handleSync}
+            disabled={isSyncing}
+          >
+            <View style={[styles.iconBox, { backgroundColor: theme === 'light' ? '#E2F1FF' : '#1E2C3A' }]}> 
+              {isSyncing ? (
+                <ActivityIndicator color={activeColors.tint} />
+              ) : (
+                <Ionicons name="cloud-upload-outline" size={22} color={activeColors.tint} />
+              )}
             </View>
             <View style={styles.optionText}> 
-              <Text style={[styles.optionTitle, { color: activeColors.text }]}>Logout</Text>
-              <Text style={[styles.optionSubtitle, { color: activeColors.icon }]}>Sign out of your account</Text>
+              <Text style={[styles.optionTitle, { color: activeColors.text }]}>Sync / Backup</Text>
+              <Text style={[styles.optionSubtitle, { color: activeColors.icon }]}>Save and sync your expenses to the cloud</Text>
+              {lastSyncedAt ? (
+                <Text style={[styles.optionMeta, { color: activeColors.icon }]}>Last synced: {lastSyncedAt.toLocaleString('en-US')}</Text>
+              ) : null}
             </View>
           </TouchableOpacity>
 
@@ -75,6 +122,7 @@ export default function ProfileScreen() {
             </View>
           </TouchableOpacity>
         </View>
+
       </View>
     </SafeAreaView>
   );
@@ -172,6 +220,13 @@ const styles = StyleSheet.create({
   optionSubtitle: {
     fontSize: 13,
     marginTop: 4,
+  },
+  optionMeta: {
+    fontSize: 11,
+    marginTop: 4,
+  },
+  optionDisabled: {
+    opacity: 0.6,
   },
   themeBadge: {
     borderRadius: 14,

@@ -4,11 +4,8 @@ import React from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { HapticTab } from '@/components/haptic-tab';
-import { useSync } from '@/hooks/useSync';
 
 export default function TabLayout() {
-  useSync();
-
   return (
     <Tabs
       screenOptions={{
@@ -31,11 +28,11 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="explore"
+        name="insights"
         options={{
           title: 'Insights',
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons size={20} name={focused ? 'search' : 'search-outline'} color={color} />
+            <Ionicons size={20} name={focused ? 'analytics' : 'analytics-outline'} color={color} />
           ),
         }}
       />
