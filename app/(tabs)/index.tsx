@@ -24,6 +24,23 @@ export default function HomeScreen() {
     },
   ] as const;
 
+  const lastMonthItems = [
+    {
+      id: '1',
+      icon: 'restaurant-outline',
+      title: 'Food and Snacks',
+      subtitle: 'Expenses for food and snacks last month',
+      amount: 'PHP 903.08',
+    },
+    {
+      id: '2',
+      icon: 'basket-outline',
+      title: 'Groceries',
+      subtitle: 'Expenses for basic household supplies last month',
+      amount: 'PHP 8,302.05',
+    },
+  ] as const;
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="light" />
@@ -93,13 +110,24 @@ export default function HomeScreen() {
           </View>
         ))}
 
-        <View style={styles.footerBlock}>
-          <Text style={styles.monthLabel}>Last Month</Text>
-          <Text style={styles.footerAmount}>PHP 903.08</Text>
-          <Text style={styles.footerAmount}>PHP 8,302.05</Text>
-          <View style={styles.pillButtonSecondary}>
-            <Text style={styles.pillText}>View Expenses</Text>
+        <Text style={styles.monthLabel}>Last Month</Text>
+        {lastMonthItems.map((item) => (
+          <View key={item.id} style={styles.expenseItem}>
+            <View style={styles.expenseLeft}>
+              <View style={styles.expenseIconBox}>
+                <Ionicons name={item.icon} size={12} color="#F1F1F5" />
+              </View>
+              <View style={styles.expenseTextWrap}>
+                <Text style={styles.expenseTitle}>{item.title}</Text>
+                <Text style={styles.expenseSubtitle}>{item.subtitle}</Text>
+              </View>
+            </View>
+            <Text style={styles.expenseAmount}>{item.amount}</Text>
           </View>
+        ))}
+
+        <View style={styles.pillButtonSecondary}>
+          <Text style={styles.pillText}>View Expenses</Text>
         </View>
       </ScrollView>
 
@@ -308,15 +336,6 @@ const styles = StyleSheet.create({
     color: '#CFCFD6',
     fontSize: 12,
     marginLeft: 6,
-  },
-  footerBlock: {
-    alignItems: 'flex-end',
-    marginTop: 8,
-  },
-  footerAmount: {
-    color: '#CFCFD7',
-    fontSize: 13,
-    marginBottom: 2,
   },
   fabLayer: {
     ...StyleSheet.absoluteFillObject,

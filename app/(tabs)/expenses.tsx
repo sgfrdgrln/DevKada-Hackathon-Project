@@ -109,20 +109,20 @@ export default function ExpensesScreen() {
             <Text style={styles.expenseAmount}>PHP 5,252,656</Text>
           </View>
         </View>
-
-        <View style={styles.actionWrap}>
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={async () => {
-              // create a simple manual expense and refresh list
-              await createExpense({ amount: 123.45, category: 'Manual', note: 'Added from UI' });
-              void load();
-            }}
-          >
-            <Text style={styles.actionText}>Add Expense Manually</Text>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
+
+      <View pointerEvents="box-none" style={styles.fabLayer}>
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={async () => {
+            // create a simple manual expense and refresh list
+            await createExpense({ amount: 123.45, category: 'Manual', note: 'Added from UI' });
+            void load();
+          }}
+        >
+          <Ionicons name="cash-outline" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
@@ -247,20 +247,24 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginLeft: 8,
   },
-  actionWrap: {
-    marginTop: 18,
-    alignItems: 'center',
+  fabLayer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+    alignItems: 'flex-end',
+    paddingRight: 16,
+    paddingBottom: 96,
   },
-  actionButton: {
-    width: '100%',
+  fab: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     backgroundColor: '#723FEB',
-    borderRadius: 4,
-    paddingVertical: 14,
     alignItems: 'center',
-  },
-  actionText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '500',
+    justifyContent: 'center',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
   },
 });
