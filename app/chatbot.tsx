@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -36,8 +36,30 @@ export default function ChatbotScreen() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currentReply, setCurrentReply] = useState('');
+  const [typingIndex, setTypingIndex] = useState(0);
+  const [isTyping, setIsTyping] = useState(false);
 
   const chatDisabled = useMemo(() => loading || !input.trim(), [input, loading]);
+
+  useEffect(() => {
+    if (isTyping && currentReply) {
+      const interval = setInterval(() => {
+        setTypingIndex((prev) => {
+          const next = prev + 1;
+          if (next > currentReply.length) {
+            setIsTyping(false);
+            appendMessage('assistant', currentReply);
+            setCurrentReply('');
+            setTypingIndex(0);
+            return 0;
+          }
+          return next;
+        });
+      }, 20);
+      return () => clearInterval(interval);
+    }
+  }, [isTyping, currentReply]);
 
   const appendMessage = (role: ChatMessage['role'], text: string) => {
     setMessages((prev) => [...prev, { id: `${role}-${prev.length + 1}`, role, text }]);
@@ -75,7 +97,9 @@ export default function ChatbotScreen() {
       completion.choices?.[0]?.message?.content ||
       'I could not generate a reply.';
 
-    appendMessage('assistant', reply);
+    setCurrentReply(reply);
+    setTypingIndex(0);
+    setIsTyping(true);
   } catch (err: any) {
     console.error(err);
     setError(err.message || 'Groq request failed');
@@ -99,7 +123,11 @@ export default function ChatbotScreen() {
         </View>
 
         <ScrollView style={styles.messages} contentContainerStyle={styles.messagesContent}>
-          {messages.map((message) => (
+          {messages.concat(
+            isTyping
+              ? [{ id: 'typing', role: 'assistant' as const, text: currentReply.slice(0, typingIndex) }]
+              : []
+          ).map((message) => (
             <View
               key={message.id}
               style={[
