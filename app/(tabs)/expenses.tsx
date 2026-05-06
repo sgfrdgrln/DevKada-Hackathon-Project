@@ -1,16 +1,29 @@
+import { Colors } from '@/constants/theme';
+import { useColorScheme } from '@/hooks/use-color-scheme';
 import { createExpense, listExpenses } from '@/services/expenseService';
 import type { Expense as DbExpense } from '@/utils/sqlite';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import type { ComponentProps } from 'react';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors } from '@/constants/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+
+const CATEGORY_OPTIONS = [
+  'Food & Snacks',
+  'Groceries',
+  'Bills',
+  'Digital Payment',
+  'Others',
+] as const;
 
 export default function ExpensesScreen() {
   const [expenses, setExpenses] = useState<DbExpense[]>([]);
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [category, setCategory] = useState<string>(CATEGORY_OPTIONS[0]);
+  const [amountInput, setAmountInput] = useState('');
+  const [noteInput, setNoteInput] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
   const theme = useColorScheme() ?? 'light';
   const activeColors = Colors[theme];
 
@@ -22,6 +35,31 @@ export default function ExpensesScreen() {
   useEffect(() => {
     void load();
   }, []);
+
+  function openModal() {
+    setCategory(CATEGORY_OPTIONS[0]);
+    setAmountInput('');
+    setNoteInput('');
+    setFormError(null);
+    setIsModalVisible(true);
+  }
+
+  async function handleSave() {
+    const parsedAmount = Number(amountInput);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      setFormError('Enter a valid amount.');
+      return;
+    }
+
+    setFormError(null);
+    await createExpense({
+      amount: parsedAmount,
+      category,
+      note: noteInput.trim() ? noteInput.trim() : null,
+    });
+    setIsModalVisible(false);
+    void load();
+  }
 
   const monthItems = expenses.map((e) => ({
     id: e.id,
@@ -115,14 +153,97 @@ export default function ExpensesScreen() {
         </View>
       </ScrollView>
 
+      <Modal
+        animationType="slide"
+        transparent
+        visible={isModalVisible}
+        onRequestClose={() => setIsModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View
+            style={[
+              styles.modalCard,
+              { backgroundColor: theme === 'light' ? '#FFFFFF' : '#1B1B22' },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: activeColors.text }]}>Add expense</Text>
+
+            <Text style={[styles.modalLabel, { color: activeColors.icon }]}>Category</Text>
+            <View style={styles.categoryRow}>
+              {CATEGORY_OPTIONS.map((option) => {
+                const isActive = option === category;
+                return (
+                  <TouchableOpacity
+                    key={option}
+                    onPress={() => setCategory(option)}
+                    style={[
+                      styles.categoryChip,
+                      { borderColor: activeColors.icon },
+                      isActive && { backgroundColor: activeColors.tint, borderColor: activeColors.tint },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryChipText,
+                        { color: activeColors.text },
+                        isActive && { color: '#FFFFFF' },
+                      ]}
+                    >
+                      {option}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={[styles.modalLabel, { color: activeColors.icon }]}>Amount</Text>
+            <TextInput
+              value={amountInput}
+              onChangeText={setAmountInput}
+              keyboardType="decimal-pad"
+              placeholder="PHP 0.00"
+              placeholderTextColor={activeColors.icon}
+              style={[styles.input, { color: activeColors.text, borderColor: activeColors.icon }]}
+            />
+
+            <Text style={[styles.modalLabel, { color: activeColors.icon }]}>Note (optional)</Text>
+            <TextInput
+              value={noteInput}
+              onChangeText={setNoteInput}
+              placeholder="Add a note"
+              placeholderTextColor={activeColors.icon}
+              multiline
+              numberOfLines={3}
+              style={[
+                styles.input,
+                styles.noteInput,
+                { color: activeColors.text, borderColor: activeColors.icon },
+              ]}
+            />
+
+            {formError ? (
+              <Text style={styles.errorText}>{formError}</Text>
+            ) : null}
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.actionButton, { borderColor: activeColors.icon }]}
+                onPress={() => setIsModalVisible(false)}
+              >
+                <Text style={[styles.actionButtonText, { color: activeColors.text }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionButtonPrimary} onPress={handleSave}>
+                <Text style={styles.actionButtonTextPrimary}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <View pointerEvents="box-none" style={styles.fabLayer}>
         <TouchableOpacity
           style={styles.fab}
-          onPress={async () => {
-            // create a simple manual expense and refresh list
-            await createExpense({ amount: 123.45, category: 'Manual', note: 'Added from UI' });
-            void load();
-          }}
+          onPress={openModal}
         >
           <Ionicons name="cash-outline" size={24} color="#FFFFFF" />
         </TouchableOpacity>
@@ -270,5 +391,83 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 5 },
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 22,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  modalLabel: {
+    fontSize: 11,
+    marginBottom: 6,
+  },
+  categoryRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  categoryChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  categoryChipText: {
+    fontSize: 11,
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 12,
+    marginBottom: 12,
+  },
+  noteInput: {
+    minHeight: 72,
+    textAlignVertical: 'top',
+  },
+  errorText: {
+    color: '#F28B82',
+    fontSize: 11,
+    marginTop: -4,
+    marginBottom: 12,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  actionButton: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  actionButtonPrimary: {
+    backgroundColor: '#723FEB',
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+  },
+  actionButtonText: {
+    fontSize: 11,
+  },
+  actionButtonTextPrimary: {
+    color: '#FFFFFF',
+    fontSize: 11,
   },
 });
