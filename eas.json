@@ -1,0 +1,28 @@
+{
+  "build": {
+    "preview": {
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://stqbupaqangdkdwraiaf.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_KEY": "sb_publishable_VUDdsr-mblx9CEYGnkKhMQ_FaxHE2V-",
+        "EXPO_PUBLIC_GEMINI_API_KEY": "AIzaSyCDBdtPe7WI6_791gJcOgeazlrpqjB6fLs",
+        "EXPO_PUBLIC_RECEIPT_EXTRACT_URL": "https://devkada-tracksy.onrender.com/api/extract-receipt",
+        "EXPO_PUBLIC_GROQ_API_KEY": "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"
+      }
+    },
+    "production": {
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://stqbupaqangdkdwraiaf.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_KEY": "sb_publishable_VUDdsr-mblx9CEYGnkKhMQ_FaxHE2V-",
+        "EXPO_PUBLIC_GEMINI_API_KEY": "AIzaSyCDBdtPe7WI6_791gJcOgeazlrpqjB6fLs",
+        "EXPO_PUBLIC_RECEIPT_EXTRACT_URL": "https://devkada-tracksy.onrender.com/api/extract-receipt",
+        "EXPO_PUBLIC_GROQ_API_KEY": "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"
+      }
+    }
+  }
+}

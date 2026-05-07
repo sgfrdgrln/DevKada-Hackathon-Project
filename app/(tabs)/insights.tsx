@@ -39,6 +39,7 @@ export default function InsightsScreen() {
   const [loadingInsights, setLoadingInsights] = useState(true);
   const [longPressedBar, setLongPressedBar] = useState<number | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [statusExpanded, setStatusExpanded] = useState(false);
   const theme = useColorScheme() ?? 'light';
   const activeColors = Colors[theme];
 
@@ -84,7 +85,6 @@ export default function InsightsScreen() {
   const statusMessage = insightData?.statusMessage ?? 'Loading your expense analytics...';
   const highlightIndex = Math.max(chartValues.length - 1, 0);
 
-  const statusBarWidth = Math.min(320, Math.max(180, statusMessage.length * 6));
   const maxBarHeight = 120;
   const maxChartValue = Math.max(...chartValues, 1);
   const barHeights = chartValues.map((value) => Math.max(18, Math.round((value / maxChartValue) * maxBarHeight)));
@@ -112,11 +112,21 @@ export default function InsightsScreen() {
         }
       >
         <Text style={[styles.heading, { color: activeColors.tint }]}>Insights</Text>
-        <View style={[styles.statusBar, { width: statusBarWidth, backgroundColor: theme === 'light' ? '#F7F5FF' : '#23202F' }] }>
-          <Text style={[styles.statusText, { color: activeColors.icon }]} numberOfLines={2} ellipsizeMode="tail">
+        <Pressable
+          onPress={() => setStatusExpanded((prev) => !prev)}
+          style={[styles.statusBar, { backgroundColor: theme === 'light' ? '#F7F5FF' : '#23202F' }]}
+        >
+          <Text
+            style={[styles.statusText, { color: activeColors.icon }]}
+            numberOfLines={statusExpanded ? undefined : 2}
+            ellipsizeMode="tail"
+          >
             {statusMessage}
           </Text>
-        </View>
+          <Text style={[styles.statusHint, { color: activeColors.icon }]}> 
+            {statusExpanded ? 'Tap to collapse' : 'Tap to view full details'}
+          </Text>
+        </Pressable>
 
         {loadingInsights ? (
           <View style={styles.loadingCard}>
@@ -342,11 +352,17 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 10,
     paddingHorizontal: 14,
+    width: '100%',
     marginBottom: 16,
   },
   statusText: {
     fontSize: 12,
     lineHeight: 16,
+  },
+  statusHint: {
+    fontSize: 10,
+    marginTop: 6,
+    opacity: 0.8,
   },
   metricCard: {
     flex: 1,

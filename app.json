@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "expense-tracker",
+    "name": "Tracksy",
     "slug": "expense-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -28,7 +28,8 @@
         "CAMERA",
         "READ_MEDIA_IMAGES",
         "READ_EXTERNAL_STORAGE"
-      ]
+      ],
+      "package": "com.sgfrdgrln.expensetracker"
     },
     "web": {
       "output": "static",
@@ -53,6 +54,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "d3e74992-7b97-46f5-a538-d8343bca9a36"
+      }
+    },
+    "owner": "sgfrdgrln"
   }
 }

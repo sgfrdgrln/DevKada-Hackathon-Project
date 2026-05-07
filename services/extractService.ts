@@ -3,7 +3,7 @@ type ReceiptExtractResult = {
 };
 
 const DEFAULT_EXTRACT_URL = process.env.EXPO_PUBLIC_RECEIPT_EXTRACT_URL;
-const RECEIPT_EXTRACT_URL =  DEFAULT_EXTRACT_URL;
+const RECEIPT_EXTRACT_URL =  "http://192.168.254.100:3000/api/extract-receipt";
 
 export async function extractReceiptData(imageUri: string): Promise<ReceiptExtractResult> {
   if (!RECEIPT_EXTRACT_URL) {
