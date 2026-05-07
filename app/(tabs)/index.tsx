@@ -2,20 +2,40 @@ import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { extractReceiptData } from '@/services/extractService';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Camera } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
-import { Link, useRouter } from 'expo-router';
+import { Link, useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function HomeScreen() {
   const [fabOpen, setFabOpen] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [name, setName] = useState('User');
   const router = useRouter();
   const theme = useColorScheme() ?? 'light';
   const activeColors = Colors[theme];
+
+  useEffect(() => {
+    const loadName = async () => {
+      const storedName = await AsyncStorage.getItem('userName');
+      if (storedName) setName(storedName);
+    };
+    loadName();
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      const loadName = async () => {
+        const storedName = await AsyncStorage.getItem('userName');
+        if (storedName) setName(storedName);
+      };
+      loadName();
+    }, [])
+  );
 
   const expenseItems = [
     {
@@ -116,7 +136,10 @@ export default function HomeScreen() {
           <View style={styles.avatarCircle}>
             <Ionicons name="person-outline" size={16} color={activeColors.background === '#fff' ? '#000' : '#FFF'} />
           </View>
-          <Text style={[styles.heading, { color: activeColors.tint }]}>What&apos;s new?</Text>
+          <View style={styles.textWrap}>
+            <Text style={[styles.greeting, { color: activeColors.text }]}>Hi {name}!</Text>
+            <Text style={[styles.heading, { color: activeColors.tint }]}>What’s new?</Text>
+          </View>
         </View>
 
         <Text style={[styles.sectionLabel, { color: activeColors.icon }]}>Expenses for this week</Text>
@@ -266,6 +289,9 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     gap: 8,
   },
+  textWrap: {
+    flex: 1,
+  },
   avatarCircle: {
     width: 22,
     height: 22,
@@ -275,9 +301,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  greeting: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
   heading: {
     color: '#FFFFFF',
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '600',
   },
   sectionLabel: {

@@ -1,4 +1,5 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -37,12 +38,20 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!ready) return;
-    const inAuth = segments[0] === 'auth';
-    if (!hasSession && !inAuth) {
-      router.replace('/auth');
-    } else if (hasSession && inAuth) {
-      router.replace('/(tabs)');
-    }
+    const checkAndNavigate = async () => {
+      const inAuth = segments[0] === 'auth';
+      const inOnboarding = segments[0] === 'onboarding';
+      const name = await AsyncStorage.getItem('userName');
+      const isOnboarded = !!name;
+      if (!hasSession && !inAuth) {
+        router.replace('/auth');
+      } else if (hasSession && !isOnboarded && !inOnboarding) {
+        router.replace('/onboarding');
+      } else if (hasSession && isOnboarded && (inAuth || inOnboarding)) {
+        router.replace('/(tabs)');
+      }
+    };
+    checkAndNavigate();
   }, [hasSession, ready, segments, router]);
 
   if (!ready) return null;

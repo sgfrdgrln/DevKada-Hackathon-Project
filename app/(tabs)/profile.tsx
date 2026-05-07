@@ -1,7 +1,8 @@
 import { syncExpenses } from '@/services/syncService';
 import { useAppTheme } from '@/theme/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -18,12 +19,20 @@ import { Colors } from '../../constants/theme';
 const settingsIcon = require('../../assets/famicons-settings.png');
 
 export default function ProfileScreen() {
-  const [name, setName] = useState('User');
+  const [name, setName] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const { theme, setTheme } = useAppTheme();
   const activeColors = Colors[theme];
   const nextTheme = theme === 'light' ? 'dark' : 'light';
+
+  useEffect(() => {
+    const loadName = async () => {
+      const storedName = await AsyncStorage.getItem('userName');
+      if (storedName) setName(storedName);
+    };
+    loadName();
+  }, []);
 
   const handleSync = async () => {
     if (isSyncing) return;
@@ -68,6 +77,7 @@ export default function ProfileScreen() {
               style={[styles.input, { backgroundColor: theme === 'light' ? '#F4F7FA' : '#23272B', color: activeColors.text, borderColor: activeColors.icon }]}
               value={name}
               onChangeText={setName}
+              onBlur={() => AsyncStorage.setItem('userName', name)}
               placeholder="User"
               placeholderTextColor={theme === 'light' ? '#8B97A4' : '#787D85'}
             />
@@ -119,6 +129,16 @@ export default function ProfileScreen() {
             </View>
             <View style={[styles.themeBadge, { backgroundColor: theme === 'light' ? '#E2E8F0' : '#23272E' }]}> 
               <Text style={[styles.badgeText, { color: activeColors.text }]}> {theme === 'light' ? 'Light' : 'Dark'} </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.option} activeOpacity={0.7} onPress={async () => { await AsyncStorage.removeItem('userName'); alert('Onboarding reset. Reload the app to see it.'); }}>
+            <View style={[styles.iconBox, { backgroundColor: '#FF6B6B' }]}> 
+              <Ionicons name="refresh-outline" size={22} color="#FFFFFF" />
+            </View>
+            <View style={styles.optionText}> 
+              <Text style={[styles.optionTitle, { color: '#FFFFFF' }]}>Reset Onboarding</Text>
+              <Text style={[styles.optionSubtitle, { color: '#FFFFFF' }]}>Clear name and restart onboarding</Text>
             </View>
           </TouchableOpacity>
         </View>
