@@ -10,66 +10,45 @@ import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { listExpenses } from '@/services/expenseService';
+import type { Expense as DbExpense } from '@/utils/sqlite';
 
 export default function HomeScreen() {
   const [fabOpen, setFabOpen] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
+  const [expenses, setExpenses] = useState<DbExpense[]>([]);
   const [name, setName] = useState('User');
   const router = useRouter();
   const theme = useColorScheme() ?? 'light';
   const activeColors = Colors[theme];
 
   useEffect(() => {
-    const loadName = async () => {
+    const loadData = async () => {
       const storedName = await AsyncStorage.getItem('userName');
       if (storedName) setName(storedName);
+
+      const rows = await listExpenses();
+      setExpenses(rows);
     };
-    loadName();
+
+    loadData();
   }, []);
 
   useFocusEffect(
     useCallback(() => {
-      const loadName = async () => {
+      const loadData = async () => {
         const storedName = await AsyncStorage.getItem('userName');
         if (storedName) setName(storedName);
+
+        const rows = await listExpenses();
+        setExpenses(rows);
       };
-      loadName();
+
+      loadData();
     }, [])
   );
 
-  const expenseItems = [
-    {
-      id: '1',
-      icon: 'restaurant-outline',
-      title: 'Food and Snacks',
-      subtitle: 'Expenses for food and snacks in a week',
-      amount: 'PHP 905.03',
-    },
-    {
-      id: '2',
-      icon: 'basket-outline',
-      title: 'Groceries',
-      subtitle: 'Expenses for basic household supplies',
-      amount: 'PHP 7,302.03',
-    },
-  ] as const;
 
-  const lastMonthItems = [
-    {
-      id: '1',
-      icon: 'restaurant-outline',
-      title: 'Food and Snacks',
-      subtitle: 'Expenses for food and snacks last month',
-      amount: 'PHP 903.08',
-    },
-    {
-      id: '2',
-      icon: 'basket-outline',
-      title: 'Groceries',
-      subtitle: 'Expenses for basic household supplies last month',
-      amount: 'PHP 8,302.05',
-    },
-  ] as const;
 
   function openExpensesModal(amount: string) {
     setFabOpen(false);
@@ -110,6 +89,26 @@ export default function HomeScreen() {
     }
   }
 
+  const now = new Date();
+
+  const weekStart = new Date();
+  weekStart.setDate(now.getDate() - 7);
+
+  const monthStart = new Date();
+  monthStart.setDate(now.getDate() - 30);
+
+  const thisWeekExpenses = expenses.filter((expense) => {
+    return new Date(expense.created_at) >= weekStart;
+  });
+
+  const thisMonthExpenses = expenses.filter((expense) => {
+    return new Date(expense.created_at) >= monthStart;
+  });
+
+  const weeklyCategoryData = groupExpensesByCategory(thisWeekExpenses);
+
+  const monthlyCategoryData = groupExpensesByCategory(thisMonthExpenses);
+
   async function pickImage() {
     if (isExtracting) return;
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -128,8 +127,33 @@ export default function HomeScreen() {
     }
   }
 
+  function groupExpensesByCategory(items: DbExpense[]) {
+    const grouped: Record<string, number> = {};
+
+    items.forEach((expense) => {
+      const category = expense.category || 'Others';
+
+      if (!grouped[category]) {
+        grouped[category] = 0;
+      }
+
+      grouped[category] += Number(expense.amount);
+    });
+
+    return Object.entries(grouped).map(([category, total], index) => ({
+      id: String(index),
+      icon:
+        category.toLowerCase().includes('food')
+          ? 'restaurant-outline'
+          : 'basket-outline',
+      title: category,
+      subtitle: `Expenses for ${category.toLowerCase()}`,
+      amount: `PHP ${total.toFixed(2)}`,
+    }));
+  }
+
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: activeColors.background }]}> 
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: activeColors.background }]}>
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
@@ -148,7 +172,7 @@ export default function HomeScreen() {
           <View style={styles.overviewLeft}>
             <Text style={[styles.amountMain, { color: activeColors.text }]}>PHP 2,491.34</Text>
             <Link href="/explore" asChild>
-              <Pressable style={[styles.pillButton, { borderColor: activeColors.tint }]}> 
+              <Pressable style={[styles.pillButton, { borderColor: activeColors.tint }]}>
                 <Text style={[styles.pillText, { color: activeColors.tint }]}>View insights</Text>
               </Pressable>
             </Link>
@@ -161,12 +185,12 @@ export default function HomeScreen() {
         </View>
 
         <Text style={[styles.progressTitle, { color: activeColors.text }]}>Progress Report</Text>
-        <Text style={[styles.progressText, { color: activeColors.icon }]}> 
+        <Text style={[styles.progressText, { color: activeColors.icon }]}>
           You have gained 30% more expense in groceries in the last 2 weeks!
         </Text>
 
         <View style={styles.metricRow}>
-          <View style={[styles.metricCard, { backgroundColor: theme === 'light' ? '#F7F8FA' : '#111015' }]}> 
+          <View style={[styles.metricCard, { backgroundColor: theme === 'light' ? '#F7F8FA' : '#111015' }]}>
             <View style={styles.metricHeader}>
               <Ionicons name="wallet-outline" size={14} color={activeColors.tint} />
               <Ionicons name="ellipsis-horizontal" size={14} color={activeColors.icon} />
@@ -175,7 +199,7 @@ export default function HomeScreen() {
             <Text style={[styles.metricAmount, { color: activeColors.text }]}>PHP 14,305.33</Text>
           </View>
 
-          <View style={[styles.metricCard, { backgroundColor: theme === 'light' ? '#F7F8FA' : '#111015' }]}> 
+          <View style={[styles.metricCard, { backgroundColor: theme === 'light' ? '#F7F8FA' : '#111015' }]}>
             <View style={styles.metricHeader}>
               <Ionicons name="trending-down-outline" size={14} color={activeColors.tint} />
               <Ionicons name="ellipsis-horizontal" size={14} color={activeColors.icon} />
@@ -185,40 +209,116 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        <Text style={[styles.monthLabel, { color: activeColors.icon }]}>This Month</Text>
-        {expenseItems.map((item) => (
-          <View key={item.id} style={styles.expenseItem}>
-            <View style={styles.expenseLeft}>
-              <View style={[styles.expenseIconBox, { borderColor: activeColors.icon }]}> 
-                <Ionicons name={item.icon} size={12} color={activeColors.tint} />
-              </View>
-              <View style={styles.expenseTextWrap}>
-                <Text style={[styles.expenseTitle, { color: activeColors.text }]}>{item.title}</Text>
-                <Text style={[styles.expenseSubtitle, { color: activeColors.icon }]}>{item.subtitle}</Text>
-              </View>
-            </View>
-            <Text style={[styles.expenseAmount, { color: activeColors.text }]}>{item.amount}</Text>
-          </View>
-        ))}
+        <Text style={[styles.monthLabel, { color: activeColors.icon }]}>
+  This Week
+</Text>
 
-        <Text style={[styles.monthLabel, { color: activeColors.icon }]}>Last Month</Text>
-        {lastMonthItems.map((item) => (
-          <View key={item.id} style={styles.expenseItem}>
-            <View style={styles.expenseLeft}>
-              <View style={[styles.expenseIconBox, { backgroundColor: theme === 'light' ? '#E8EAF6' : '#2A253A', borderColor: activeColors.icon }]}> 
-                <Ionicons name={item.icon} size={12} color={activeColors.tint} />
-              </View>
-              <View style={styles.expenseTextWrap}>
-                <Text style={[styles.expenseTitle, { color: activeColors.text }]}>{item.title}</Text>
-                <Text style={[styles.expenseSubtitle, { color: activeColors.icon }]}>{item.subtitle}</Text>
-              </View>
-            </View>
-            <Text style={[styles.expenseAmount, { color: activeColors.text }]}>{item.amount}</Text>
-          </View>
-        ))}
+{weeklyCategoryData.map((item) => (
+  <View key={item.id} style={styles.expenseItem}>
+    <View style={styles.expenseLeft}>
+      <View
+        style={[
+          styles.expenseIconBox,
+          { borderColor: activeColors.icon },
+        ]}
+      >
+        <Ionicons
+          name={item.icon as any}
+          size={12}
+          color={activeColors.tint}
+        />
+      </View>
+
+      <View style={styles.expenseTextWrap}>
+        <Text
+          style={[
+            styles.expenseTitle,
+            { color: activeColors.text },
+          ]}
+        >
+          {item.title}
+        </Text>
+
+        <Text
+          style={[
+            styles.expenseSubtitle,
+            { color: activeColors.icon },
+          ]}
+        >
+          {item.subtitle}
+        </Text>
+      </View>
+    </View>
+
+    <Text
+      style={[
+        styles.expenseAmount,
+        { color: activeColors.text },
+      ]}
+    >
+      {item.amount}
+    </Text>
+  </View>
+))}
+
+<Text style={[styles.monthLabel, { color: activeColors.icon }]}>
+  This Month
+</Text>
+
+{monthlyCategoryData.map((item) => (
+  <View key={item.id} style={styles.expenseItem}>
+    <View style={styles.expenseLeft}>
+      <View
+        style={[
+          styles.expenseIconBox,
+          {
+            backgroundColor:
+              theme === 'light' ? '#E8EAF6' : '#2A253A',
+            borderColor: activeColors.icon,
+          },
+        ]}
+      >
+        <Ionicons
+          name={item.icon as any}
+          size={12}
+          color={activeColors.tint}
+        />
+      </View>
+
+      <View style={styles.expenseTextWrap}>
+        <Text
+          style={[
+            styles.expenseTitle,
+            { color: activeColors.text },
+          ]}
+        >
+          {item.title}
+        </Text>
+
+        <Text
+          style={[
+            styles.expenseSubtitle,
+            { color: activeColors.icon },
+          ]}
+        >
+          {item.subtitle}
+        </Text>
+      </View>
+    </View>
+
+    <Text
+      style={[
+        styles.expenseAmount,
+        { color: activeColors.text },
+      ]}
+    >
+      {item.amount}
+    </Text>
+  </View>
+))}
 
         <Link href="/expenses" asChild>
-          <Pressable style={[styles.pillButtonSecondary, { borderColor: activeColors.tint }]}> 
+          <Pressable style={[styles.pillButtonSecondary, { borderColor: activeColors.tint }]}>
             <Text style={[styles.pillText, { color: activeColors.tint }]}>View Expenses</Text>
           </Pressable>
         </Link>
