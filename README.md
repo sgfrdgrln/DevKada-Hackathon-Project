@@ -1,8 +1,54 @@
-# Welcome to your Expo app 👋
+# Tracksy
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Tracksy is an Expo SDK 54 expense tracker built with Expo Router, Supabase, SQLite, and React Native. It supports offline-first expense capture, synced user sessions, receipt scanning, monthly income tracking, and an insights dashboard for spending analysis.
 
-## Get started
+## What Tracksy Does
+
+Tracksy helps users:
+
+- Record expenses locally and sync them when online
+- Track monthly income
+- Scan receipt images and extract totals
+- View spending insights by day, week, and month
+- Chat with a finance assistant about expense totals and budgets
+- Use either authenticated Supabase sessions or offline guest mode
+
+## Stack
+
+- Expo SDK 54
+- Expo Router
+- React Native 0.81
+- Supabase Auth and database sync
+- Expo SQLite for local persistence
+- AsyncStorage for lightweight local settings
+- NetInfo for online/offline detection
+- Expo Camera and Image Picker for receipt capture
+- React Native Reanimated and Gesture Handler for navigation and UI interactions
+
+## Project Structure
+
+- `app/` - routes and screens managed by Expo Router
+- `components/` - shared UI pieces
+- `hooks/` - reusable app hooks such as auto-sync and theme helpers
+- `services/` - data and sync logic for expenses, insights, receipts, and monthly income
+- `utils/` - SQLite, Supabase, and emitter helpers
+- `theme/` - global theme context
+- `constants/` - theme values and shared constants
+
+## Main Screens
+
+- `app/welcome.tsx` - landing screen
+- `app/onboarding.tsx` - first-run onboarding
+- `app/auth.tsx` - authentication flow
+- `app/guest-profile.tsx` - offline guest setup
+- `app/(tabs)/index.tsx` - home dashboard and quick actions
+- `app/(tabs)/expenses.tsx` - expense management
+- `app/(tabs)/insights.tsx` - spending analytics
+- `app/(tabs)/profile.tsx` - account and sync controls
+- `app/chatbot.tsx` - finance chatbot
+- `app/calculator.tsx` - calculator utility
+
+## Setup
 
 1. Install dependencies
 
@@ -10,41 +56,52 @@ This is an [Expo](https://expo.dev) project created with [`create-expo-app`](htt
    npm install
    ```
 
-2. Start the app
+2. Start the app locally
 
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+3. Run lint checks
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+   ```bash
+   npm run lint
+   ```
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+## Environment Variables
 
-## Get a fresh project
+Tracksy relies on Expo public environment variables for runtime services.
 
-When you're ready, run:
+- `EXPO_PUBLIC_SUPABASE_URL`
+- `EXPO_PUBLIC_SUPABASE_KEY`
+- `EXPO_PUBLIC_GEMINI_API_KEY`
+- `EXPO_PUBLIC_GROQ_API_KEY`
+- `EXPO_PUBLIC_RECEIPT_EXTRACT_URL`
+
+These must be available in the build environment for standalone APKs.
+
+## Data Flow
+
+1. Expenses are written to SQLite first.
+2. If the user is authenticated and online, data is synced to Supabase.
+3. Auto-sync hooks listen for local change events and push updates in the background.
+4. Insights and chatbot screens read from the local expense store.
+
+## Android Build Notes
+
+- The app uses Expo Router as the entry system.
+- Native modules include SQLite, Camera, Image Picker, Reanimated, Gesture Handler, AsyncStorage, and NetInfo.
+- Production APKs should be built with the same native module set that the app imports at runtime.
+
+## Documentation
+
+For a fuller project overview, see [docs/tracksy.md](docs/tracksy.md).
+
+## Useful Commands
 
 ```bash
+npm run android
+npm run ios
+npm run web
 npm run reset-project
 ```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
