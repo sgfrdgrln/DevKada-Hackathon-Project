@@ -1,24 +1,29 @@
 import { StatusBar } from 'expo-status-bar';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { getExpenseInsights, ExpenseInsight } from '@/services/insightService';
 
 type FilterRange = 'daily' | 'weekly' | 'monthly';
 
-const BAR_VALUES_BY_RANGE: Record<FilterRange, readonly number[]> = {
-  daily: [22, 40, 18, 55, 34, 76, 50],
-  weekly: [36, 68, 30, 82, 70, 48, 24, 33],
-  monthly: [76, 12, 80, 14, 66, 84, 78, 46, 24, 30, 14, 40],
-};
+const CATEGORY_COLORS = [
+  '#723FEB',
+  '#97DEF1',
+  '#FF6B9D',
+  '#FFB347',
+  '#76D7C4',
+  '#F7DC6F',
+  '#BB8FCE',
+  '#85C1E2',
+];
 
-const LABELS_BY_RANGE: Record<FilterRange, readonly string[]> = {
-  daily: ['Sun', 'Mon', 'Tues', 'Wed', 'Thurs', 'Fri', 'Sat', 'Sun'],
-  weekly: ['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5', 'Week 6', 'Week 7', 'Week 8'],
-  monthly: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
-};
+function getCategoryColor(category: string): string {
+  const hash = category.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  return CATEGORY_COLORS[hash % CATEGORY_COLORS.length];
+}
 
 const FILTER_OPTIONS: { label: string; value: FilterRange }[] = [
   { label: 'Daily', value: 'daily' },
@@ -28,62 +33,135 @@ const FILTER_OPTIONS: { label: string; value: FilterRange }[] = [
 
 export default function InsightsScreen() {
   const [selectedRange, setSelectedRange] = useState<FilterRange>('monthly');
+  const [insightData, setInsightData] = useState<ExpenseInsight | null>(null);
+  const [loadingInsights, setLoadingInsights] = useState(true);
+  const [longPressedBar, setLongPressedBar] = useState<number | null>(null);
   const theme = useColorScheme() ?? 'light';
   const activeColors = Colors[theme];
 
-  const currentMonth = new Date().getMonth(); // 0-11, May = 4
-  const currentDate = new Date();
-  const dayOfWeek = currentDate.getDay(); // 0-6, Sunday = 0
-  const dateOfMonth = currentDate.getDate();
-  const weekOfMonth = Math.floor((dateOfMonth - 1) / 7); // 0-3
-
-  const barValues = useMemo(() => {
-    const values = BAR_VALUES_BY_RANGE[selectedRange];
-    if (selectedRange === 'monthly') {
-      return values.slice(0, currentMonth + 1);
+  useEffect(() => {
+    async function loadInsights() {
+      setLoadingInsights(true);
+      try {
+        const data = await getExpenseInsights(selectedRange);
+        setInsightData(data);
+      } catch (error) {
+        console.warn('Insight load failed', error);
+        setInsightData(null);
+      } finally {
+        setLoadingInsights(false);
+      }
     }
-    return values;
-  }, [selectedRange, currentMonth]);
 
-  const xAxisLabels = useMemo(() => {
-    const labels = LABELS_BY_RANGE[selectedRange];
-    if (selectedRange === 'monthly') {
-      return labels.slice(0, currentMonth + 1);
-    }
-    return labels;
-  }, [selectedRange, currentMonth]);
+    loadInsights();
+  }, [selectedRange]);
 
-  const getCurrentIndex = () => {
-    switch (selectedRange) {
-      case 'monthly':
-        return currentMonth;
-      case 'weekly':
-        return weekOfMonth;
-      case 'daily':
-        return dayOfWeek;
-      default:
-        return -1;
-    }
+  const chartValues = insightData?.chartValues ?? [];
+  const chartLabels = insightData?.chartLabels ?? [];
+  const totalValue = insightData?.total ?? 0;
+  const peakLabel = insightData?.peakLabel ?? 'N/A';
+  const averageValue = insightData?.average ?? 0;
+  const topCategory = insightData?.topCategory ?? 'N/A';
+  const topCategoryAmount = insightData?.topCategoryAmount ?? 0;
+  const statusMessage = insightData?.statusMessage ?? 'Loading your expense analytics...';
+  const highlightIndex = Math.max(chartValues.length - 1, 0);
+
+  const statusBarWidth = Math.min(320, Math.max(180, statusMessage.length * 6));
+  const maxBarHeight = 120;
+  const maxChartValue = Math.max(...chartValues, 1);
+  const barHeights = chartValues.map((value) => Math.max(18, Math.round((value / maxChartValue) * maxBarHeight)));
+
+  const handleBarLongPress = (index: number) => {
+    setLongPressedBar(index);
+    setTimeout(() => {
+      setLongPressedBar(null);
+    }, 2000);
   };
-
-  const highlightIndex = getCurrentIndex();
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: activeColors.background }]}> 
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={[styles.heading, { color: activeColors.tint }]}>Insights</Text>
-        <Text style={[styles.subtitle, { color: activeColors.icon }]}>You have gained 30% more expense in groceries in this month!</Text>
+        <View style={[styles.statusBar, { width: statusBarWidth, backgroundColor: theme === 'light' ? '#F7F5FF' : '#23202F' }] }>
+          <Text style={[styles.statusText, { color: activeColors.icon }]} numberOfLines={2} ellipsizeMode="tail">
+            {statusMessage}
+          </Text>
+        </View>
+
+        {loadingInsights ? (
+          <View style={styles.loadingCard}>
+            <ActivityIndicator color={activeColors.tint} />
+          </View>
+        ) : (
+          <View style={styles.metricsRow}>
+            <View style={[styles.metricCard, { backgroundColor: theme === 'light' ? '#F7F5FF' : '#23202F' }]}>
+              <Text style={[styles.metricLabel, { color: activeColors.icon }]}>Total spend</Text>
+              <Text style={[styles.metricValue, { color: activeColors.text }]}>{`PHP ${totalValue.toFixed(2)}`}</Text>
+            </View>
+            <View style={[styles.metricCard, { backgroundColor: theme === 'light' ? '#F7F5FF' : '#23202F' }]}>
+              <Text style={[styles.metricLabel, { color: activeColors.icon }]}>Peak period</Text>
+              <Text style={[styles.metricValue, { color: activeColors.text }]}>{peakLabel}</Text>
+            </View>
+            <View style={[styles.metricCard, { backgroundColor: theme === 'light' ? '#F7F5FF' : '#23202F' }]}>
+              <Text style={[styles.metricLabel, { color: activeColors.icon }]}>Average</Text>
+              <Text style={[styles.metricValue, { color: activeColors.text }]}>{`PHP ${averageValue.toFixed(2)}`}</Text>
+            </View>
+          </View>
+        )}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.barChartContent}>
           <View style={styles.barChart}>
-            {barValues.map((value, index) => {
+            {chartValues.map((value, index) => {
               const isHighlighted = index === highlightIndex;
+              const isLongPressed = longPressedBar === index;
               return (
-                <View key={`${selectedRange}-${index}-${value}`} style={styles.barGroup}>
-                  <View style={[styles.bar, { height: value, backgroundColor: isHighlighted ? activeColors.tint : theme === 'light' ? '#C4C4D1' : '#4B4A5A' }, isHighlighted && styles.barHighlighted]} />
-                  <Text style={[styles.barLabel, isHighlighted && styles.barLabelHighlighted, { color: isHighlighted ? activeColors.tint : activeColors.icon }]}>{xAxisLabels[index]}</Text>
-                </View>
+                <TouchableOpacity
+                  key={`${selectedRange}-${index}-${value}`}
+                  style={styles.barGroup}
+                  onLongPress={() => handleBarLongPress(index)}
+                  delayLongPress={300}
+                >
+                  <View
+                    style={[
+                      styles.bar,
+                      {
+                        height: barHeights[index],
+                        backgroundColor: isLongPressed
+                          ? '#FF6B9D'
+                          : isHighlighted
+                          ? activeColors.tint
+                          : theme === 'light'
+                          ? '#C4C4D1'
+                          : '#4B4A5A',
+                      },
+                      (isHighlighted || isLongPressed) && styles.barHighlighted,
+                    ]}
+                  />
+                  {isLongPressed && (
+                    <View
+                      style={[
+                        styles.barTooltip,
+                        { backgroundColor: theme === 'light' ? '#F7F5FF' : '#23202F' },
+                      ]}
+                    >
+                      <Text style={[styles.barTooltipText, { color: activeColors.text }]}>
+                        PHP {value.toFixed(2)}
+                      </Text>
+                    </View>
+                  )}
+                  <Text
+                    style={[
+                      styles.barLabel,
+                      (isHighlighted || isLongPressed) && styles.barLabelHighlighted,
+                      {
+                        color: isLongPressed ? '#FF6B9D' : isHighlighted ? activeColors.tint : activeColors.icon,
+                      },
+                    ]}
+                  >
+                    {chartLabels[index]}
+                  </Text>
+                </TouchableOpacity>
               );
             })}
           </View>
@@ -108,15 +186,26 @@ export default function InsightsScreen() {
         </View>
 
         <View style={styles.insightBlock}>
-          <View style={styles.donutOuter}>
-            <View style={styles.donutInner} />
+          <View style={styles.donutContainer}>
+            <View style={styles.donutOuter}>
+              <View style={styles.donutInner} />
+            </View>
+            <View style={styles.colorLegend}>
+              <View
+                style={[
+                  styles.colorDot,
+                  { backgroundColor: getCategoryColor(topCategory) },
+                ]}
+              />
+              <Text style={[styles.colorLabel, { color: activeColors.icon }]}>{topCategory}</Text>
+            </View>
           </View>
 
           <View style={styles.insightTextWrap}>
-            <Text style={styles.insightTitle}>Monthly Insights</Text>
-            <Text style={styles.insightLine}>40% is spent with groceries</Text>
-            <Text style={styles.insightLine}>20% is spent with food and snacks</Text>
-            <Text style={styles.insightLine}>40% is spent with bills</Text>
+            <Text style={styles.insightTitle}>Spending summary</Text>
+            <Text style={styles.insightLine}>{`Top category: ${topCategory}`}</Text>
+            <Text style={styles.insightLine}>{`Top category spend: PHP ${topCategoryAmount.toFixed(2)}`}</Text>
+            <Text style={styles.insightLine}>{`Peak period: ${peakLabel}`}</Text>
           </View>
         </View>
 
@@ -172,6 +261,18 @@ const styles = StyleSheet.create({
     borderRadius: 1,
     backgroundColor: '#723FEB',
   },
+  barTooltip: {
+    position: 'absolute',
+    top: -30,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    zIndex: 999,
+  },
+  barTooltipText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
   barHighlighted: {
     backgroundColor: '#E0B0FF',
     shadowColor: '#723FEB',
@@ -193,6 +294,48 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginBottom: 24,
+  },
+  metricsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginBottom: 18,
+  },
+  loadingCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+    padding: 20,
+    backgroundColor: '#262337',
+    marginBottom: 18,
+  },
+  statusBar: {
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+  },
+  statusText: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  metricCard: {
+    flex: 1,
+    borderRadius: 18,
+    padding: 14,
+    minHeight: 80,
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#3F3950',
+  },
+  metricLabel: {
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  metricValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 8,
   },
   chip: {
     borderRadius: 999,
@@ -219,6 +362,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
   },
+  donutContainer: {
+    alignItems: 'center',
+    marginRight: 12,
+  },
   donutOuter: {
     width: 86,
     height: 86,
@@ -231,6 +378,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     transform: [{ rotate: '-30deg' }],
+    marginBottom: 8,
+  },
+  colorLegend: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  colorDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  colorLabel: {
+    fontSize: 10,
+    maxWidth: 70,
   },
   donutInner: {
     width: 30,
