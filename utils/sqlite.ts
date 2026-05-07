@@ -73,7 +73,15 @@ export async function createExpense(expense: Omit<Expense, 'is_synced'>) {
 export async function getUnsyncedExpenses(): Promise<Expense[]> {
   const db = await getDb();
   return db.getAllAsync<Expense>(
-    'SELECT * FROM expenses WHERE is_synced = 0'
+    "SELECT * FROM expenses WHERE is_synced = 0 AND (user_id IS NULL OR user_id = 'local')"
+  );
+}
+
+export async function getUnsyncedExpensesForUser(userId: string): Promise<Expense[]> {
+  const db = await getDb();
+  return db.getAllAsync<Expense>(
+    'SELECT * FROM expenses WHERE is_synced = 0 AND user_id = ?',
+    [userId]
   );
 }
 
@@ -132,14 +140,34 @@ export async function upsertExpenses(remote: Partial<Expense>[]) {
 export async function getAllExpenses(): Promise<Expense[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<Expense>(
-    'SELECT * FROM expenses ORDER BY created_at DESC'
+    "SELECT * FROM expenses WHERE user_id IS NULL OR user_id = 'local' ORDER BY created_at DESC"
   );
   return rows;
 }
 
+export async function getAllExpensesForUser(userId: string): Promise<Expense[]> {
+  const db = await getDb();
+  return db.getAllAsync<Expense>(
+    'SELECT * FROM expenses WHERE user_id = ? ORDER BY created_at DESC',
+    [userId]
+  );
+}
+
 export async function getExpenseById(id: string): Promise<Expense | null> {
   const db = await getDb();
-  const row = await db.getFirstAsync<Expense>('SELECT * FROM expenses WHERE id = ?', [id]);
+  const row = await db.getFirstAsync<Expense>(
+    "SELECT * FROM expenses WHERE id = ? AND (user_id IS NULL OR user_id = 'local')",
+    [id]
+  );
+  return row ?? null;
+}
+
+export async function getExpenseByIdForUser(id: string, userId: string): Promise<Expense | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<Expense>(
+    'SELECT * FROM expenses WHERE id = ? AND user_id = ?',
+    [id, userId]
+  );
   return row ?? null;
 }
 
@@ -176,4 +204,12 @@ export async function deleteExpenseLocal(id: string) {
 
 export async function clearExpenses() {
   await runSql('DELETE FROM expenses');
+}
+
+export async function reassignLocalUserId(oldUserId: string, newUserId: string) {
+  // Reassign expenses created with a temporary local user id to the authenticated user
+  await runSql(
+    'UPDATE expenses SET user_id = ?, is_synced = 0 WHERE user_id = ?',
+    [newUserId, oldUserId]
+  );
 }

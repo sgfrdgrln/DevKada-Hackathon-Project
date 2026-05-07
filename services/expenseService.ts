@@ -1,11 +1,12 @@
 import {
   createExpense as createLocalExpense,
   deleteExpenseLocal,
-  getAllExpenses,
-  getExpenseById,
+  getAllExpensesForUser,
+  getExpenseByIdForUser,
   updateExpenseLocal,
 } from '@/utils/sqlite';
 import { supabase } from '@/utils/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -15,10 +16,23 @@ type CreatePayload = {
   note?: string | null;
 };
 
-export async function createExpense(payload: CreatePayload) {
+const LOCAL_USER_ID_KEY = 'localUserId';
+
+async function getLocalUserId() {
+  const stored = await AsyncStorage.getItem(LOCAL_USER_ID_KEY);
+  if (stored) return stored;
+  const newId = uuidv4();
+  await AsyncStorage.setItem(LOCAL_USER_ID_KEY, newId);
+  return newId;
+}
+
+async function getCurrentUserId(): Promise<string | null> {
   const session = await supabase.auth.getSession();
-  const userId = session.data.session?.user?.id;
-  if (!userId) throw new Error('User not signed in');
+  return session.data.session?.user?.id ?? null;
+}
+
+export async function createExpense(payload: CreatePayload) {
+  const userId = (await getCurrentUserId()) ?? (await getLocalUserId());
 
   const id = uuidv4();
   const now = new Date().toISOString();
@@ -37,11 +51,13 @@ export async function createExpense(payload: CreatePayload) {
 }
 
 export async function listExpenses() {
-  return await getAllExpenses();
+  const userId = await getCurrentUserId();
+  return userId ? await getAllExpensesForUser(userId) : await getAllExpensesForUser(await getLocalUserId());
 }
 
 export async function getExpense(id: string) {
-  return await getExpenseById(id);
+  const userId = await getCurrentUserId();
+  return userId ? await getExpenseByIdForUser(id, userId) : await getExpenseByIdForUser(id, await getLocalUserId());
 }
 
 export async function updateExpense(id: string, changes: Partial<CreatePayload>) {

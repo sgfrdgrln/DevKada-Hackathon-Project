@@ -1,6 +1,8 @@
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { syncExpenses } from '@/services/syncService';
 import { supabase } from '@/utils/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -59,6 +61,8 @@ export default function AuthScreen() {
         if (signUpError) throw signUpError;
       }
 
+      await AsyncStorage.setItem('authMode', 'supabase');
+      await syncExpenses();
       router.replace('/(tabs)');
     } catch (err: any) {
       setError(err?.message ?? 'Authentication failed.');

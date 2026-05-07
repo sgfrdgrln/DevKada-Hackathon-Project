@@ -1,7 +1,9 @@
 import { syncExpenses } from '@/services/syncService';
 import { useAppTheme } from '@/theme/ThemeContext';
+import { supabase } from '@/utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -22,9 +24,11 @@ export default function ProfileScreen() {
   const [name, setName] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+  const [hasSession, setHasSession] = useState(false);
   const { theme, setTheme } = useAppTheme();
   const activeColors = Colors[theme];
   const nextTheme = theme === 'light' ? 'dark' : 'light';
+  const router = useRouter();
 
   useEffect(() => {
     const loadName = async () => {
@@ -32,6 +36,20 @@ export default function ProfileScreen() {
       if (storedName) setName(storedName);
     };
     loadName();
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (isMounted) setHasSession(!!data.session);
+    });
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (isMounted) setHasSession(!!session);
+    });
+    return () => {
+      isMounted = false;
+      subscription.subscription.unsubscribe();
+    };
   }, []);
 
   const handleSync = async () => {
@@ -63,6 +81,64 @@ export default function ProfileScreen() {
     }
   };
 
+  const handleSignIn = async () => {
+    await AsyncStorage.setItem('authMode', 'supabase');
+    router.replace('/auth');
+  };
+
+  const handleRestore = async () => {
+    if (isSyncing) return;
+    setIsSyncing(true);
+    try {
+      const result = await syncExpenses();
+      if (result.status === 'offline') {
+        Alert.alert('No internet connection', 'Connect to the internet and try again.');
+        return;
+      }
+      if (result.status === 'unauthenticated') {
+        Alert.alert('Sign in required', 'Please sign in before restoring.');
+        return;
+      }
+      if (result.status === 'success') {
+        const now = new Date();
+        setLastSyncedAt(now);
+        Alert.alert('Restore complete', 'Cloud data restored and synced.');
+        return;
+      }
+      Alert.alert('Restore failed', 'Please try again.');
+    } catch (err) {
+      console.warn('Restore failed', err);
+      Alert.alert('Restore failed', 'Please try again.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    Alert.alert(
+      'Sign out',
+      'Are you sure you want to sign out? Your local data will remain on this device.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await supabase.auth.signOut();
+              await AsyncStorage.setItem('authMode', 'offline');
+              setHasSession(false);
+              router.replace('/welcome');
+            } catch (err) {
+              console.warn('Sign out failed', err);
+              Alert.alert('Sign out failed', 'Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: activeColors.background }]}> 
@@ -87,6 +163,18 @@ export default function ProfileScreen() {
         <Text style={[styles.sectionTitle, { color: activeColors.text }]}>Account Actions</Text>
 
         <View style={[styles.card, { backgroundColor: theme === 'light' ? '#F8FAFC' : '#1A1D21' }]}> 
+          {!hasSession ? (
+            <TouchableOpacity style={styles.option} activeOpacity={0.7} onPress={handleSignIn}>
+              <View style={[styles.iconBox, { backgroundColor: theme === 'light' ? '#E2F1FF' : '#1E2C3A' }]}> 
+                <Ionicons name="log-in-outline" size={22} color={activeColors.tint} />
+              </View>
+              <View style={styles.optionText}> 
+                <Text style={[styles.optionTitle, { color: activeColors.text }]}>Sign in to sync</Text>
+                <Text style={[styles.optionSubtitle, { color: activeColors.icon }]}>Create an account to back up your expenses</Text>
+              </View>
+            </TouchableOpacity>
+          ) : null}
+
           <TouchableOpacity style={styles.option} activeOpacity={0.7}>
             <View style={[styles.iconBox, { backgroundColor: theme === 'light' ? '#DEEBFF' : '#22272E' }]}> 
               <Image source={settingsIcon} style={styles.icon} />
@@ -118,6 +206,35 @@ export default function ProfileScreen() {
               ) : null}
             </View>
           </TouchableOpacity>
+
+          {hasSession ? (
+            <TouchableOpacity
+              style={[styles.option, isSyncing && styles.optionDisabled]}
+              activeOpacity={0.7}
+              onPress={handleRestore}
+              disabled={isSyncing}
+            >
+              <View style={[styles.iconBox, { backgroundColor: theme === 'light' ? '#E8FFF4' : '#0F2A1E' }]}> 
+                <Ionicons name="cloud-download-outline" size={22} color={activeColors.tint} />
+              </View>
+              <View style={styles.optionText}> 
+                <Text style={[styles.optionTitle, { color: activeColors.text }]}>Restore & Sync</Text>
+                <Text style={[styles.optionSubtitle, { color: activeColors.icon }]}>Pull your cloud data and merge locally</Text>
+              </View>
+            </TouchableOpacity>
+          ) : null}
+
+          {hasSession ? (
+            <TouchableOpacity style={styles.option} activeOpacity={0.7} onPress={handleLogout}>
+              <View style={[styles.iconBox, { backgroundColor: '#FF6B6B' }]}> 
+                <Ionicons name="log-out-outline" size={22} color="#FFFFFF" />
+              </View>
+              <View style={styles.optionText}> 
+                <Text style={[styles.optionTitle, { color: '#FFFFFF' }]}>Sign out</Text>
+                <Text style={[styles.optionSubtitle, { color: '#FFFFFF' }]}>Sign out of your account</Text>
+              </View>
+            </TouchableOpacity>
+          ) : null}
 
           <TouchableOpacity style={styles.option} activeOpacity={0.7} onPress={() => setTheme(nextTheme)}>
             <View style={[styles.iconBox, { backgroundColor: theme === 'light' ? '#FFF0C7' : '#2F2F35' }]}> 

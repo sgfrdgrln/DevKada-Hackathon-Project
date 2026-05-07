@@ -13,7 +13,7 @@ export default function OnboardingScreen() {
   const handleFinish = async () => {
     if (name.trim()) {
       await AsyncStorage.setItem('userName', name.trim());
-      router.replace('/');
+      router.replace('/(tabs)');
     }
   };
 
