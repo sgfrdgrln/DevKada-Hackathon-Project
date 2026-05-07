@@ -1,5 +1,4 @@
 import { listExpenses } from '@/services/expenseService';
-import type { Expense } from '@/utils/sqlite';
 
 type InsightRange = 'daily' | 'weekly' | 'monthly';
 

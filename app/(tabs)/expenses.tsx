@@ -1,13 +1,16 @@
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAutoSync } from '@/hooks/useAutoSync';
+import { showToast } from '@/hooks/useToast';
 import { createExpense, deleteExpense, listExpenses, updateExpense } from '@/services/expenseService';
+import { syncExpenses } from '@/services/syncService';
 import type { Expense as DbExpense } from '@/utils/sqlite';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import type { ComponentProps } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -42,6 +45,7 @@ export default function ExpensesScreen() {
   const [sortOption, setSortOption] = useState<SortOption>(DEFAULT_SORT);
   const [dateMenuOpen, setDateMenuOpen] = useState(false);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
   const { openModal: openModalParam, amount: amountParam } = useLocalSearchParams<{
     openModal?: string;
@@ -55,9 +59,24 @@ export default function ExpensesScreen() {
     setExpenses(rows);
   }
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await syncExpenses();
+      await load();
+    } catch (error) {
+      console.warn('Refresh failed', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
   useEffect(() => {
     void load();
   }, []);
+
+  // Auto-sync when authenticated
+  useAutoSync();
 
   const openModalWithAmount = useCallback((nextAmount: string) => {
     setEditingExpenseId(null);
@@ -105,20 +124,37 @@ export default function ExpensesScreen() {
         note: noteInput.trim() ? noteInput.trim() : null,
       });
       setEditingExpenseId(null);
+      showToast('Expense updated', { type: 'success' });
     } else {
       await createExpense({
         amount: parsedAmount,
         category,
         note: noteInput.trim() ? noteInput.trim() : null,
       });
+      showToast('Expense added', { type: 'success' });
     }
     setIsModalVisible(false);
     void load();
   }
 
   async function handleDelete(expenseId: string) {
-    await deleteExpense(expenseId);
-    void load();
+    Alert.alert('Delete expense', 'Are you sure you want to delete this expense?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteExpense(expenseId);
+            showToast('Expense deleted', { type: 'success' });
+            await load();
+          } catch (err) {
+            console.warn('delete failed', err);
+            showToast('Delete failed', { type: 'error' });
+          }
+        },
+      },
+    ]);
   }
 
   const filteredExpenses = useMemo(() => {
@@ -190,6 +226,11 @@ export default function ExpensesScreen() {
           : 'basket-outline') as ComponentProps<typeof Ionicons>['name'],
         title: expense.category ?? 'Manual',
         subtitle: expense.note ?? 'Added manually',
+        createdAt: new Date(expense.created_at).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        }),
         amount: `PHP ${Number(expense.amount).toFixed(2)}`,
         source: expense,
       })),
@@ -206,7 +247,18 @@ export default function ExpensesScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: activeColors.background }]}> 
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={activeColors.tint}
+            colors={[activeColors.tint]}
+          />
+        }
+      >
         <Text style={[styles.pageTitle, { color: activeColors.text }]}>{headingText}</Text>
         <View style={styles.overviewRow}>
           <View style={styles.overviewLeft}>
@@ -319,6 +371,7 @@ export default function ExpensesScreen() {
                     <View style={styles.expenseTextWrap}>
                       <Text style={[styles.expenseTitle, { color: activeColors.text }]}>{item.title}</Text>
                       <Text style={[styles.expenseSubtitle, { color: activeColors.icon }]}>{item.subtitle}</Text>
+                      <Text style={[styles.expenseDate, { color: activeColors.icon }]}>{item.createdAt}</Text>
                     </View>
                   </View>
                   <Text style={[styles.expenseAmount, { color: activeColors.text }]}>{item.amount}</Text>
@@ -691,6 +744,11 @@ expenseItem: {
     fontSize: 11,
   },
   expenseSubtitle: {
+    color: '#767681',
+    fontSize: 7.5,
+    marginTop: 1,
+  },
+  expenseDate: {
     color: '#767681',
     fontSize: 7.5,
     marginTop: 1,

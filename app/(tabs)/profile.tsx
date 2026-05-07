@@ -1,30 +1,34 @@
+import { Colors } from '@/constants/theme';
+import { useAutoSync } from '@/hooks/useAutoSync';
 import { syncExpenses } from '@/services/syncService';
 import { useAppTheme } from '@/theme/ThemeContext';
+import { emitNameChange } from '@/utils/nameChangeEmitter';
 import { supabase } from '@/utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  SafeAreaView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    RefreshControl,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
-import { Colors } from '../../constants/theme';
 
 const settingsIcon = require('../../assets/famicons-settings.png');
 
 export default function ProfileScreen() {
   const [name, setName] = useState('');
+  const [draftName, setDraftName] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
   const [hasSession, setHasSession] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const { theme, setTheme } = useAppTheme();
   const activeColors = Colors[theme];
   const nextTheme = theme === 'light' ? 'dark' : 'light';
@@ -32,8 +36,19 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     const loadName = async () => {
+      const { data } = await supabase.auth.getUser();
+      const displayName = data.user?.user_metadata?.display_name;
+      if (displayName && typeof displayName === 'string') {
+        setName(displayName);
+        setDraftName(displayName);
+        return;
+      }
+
       const storedName = await AsyncStorage.getItem('userName');
-      if (storedName) setName(storedName);
+      if (storedName) {
+        setName(storedName);
+        setDraftName(storedName);
+      }
     };
     loadName();
   }, []);
@@ -44,7 +59,13 @@ export default function ProfileScreen() {
       if (isMounted) setHasSession(!!data.session);
     });
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (isMounted) setHasSession(!!session);
+      if (!isMounted) return;
+      setHasSession(!!session);
+      const displayName = session?.user?.user_metadata?.display_name;
+      if (displayName && typeof displayName === 'string') {
+        setName(displayName);
+        setDraftName(displayName);
+      }
     });
     return () => {
       isMounted = false;
@@ -84,6 +105,18 @@ export default function ProfileScreen() {
   const handleSignIn = async () => {
     await AsyncStorage.setItem('authMode', 'supabase');
     router.replace('/auth');
+  };
+
+  const handleConfirmGuestName = async () => {
+    const nextName = draftName.trim();
+    if (!nextName) {
+      Alert.alert('Display name required', 'Please enter a name before confirming.');
+      return;
+    }
+
+    await AsyncStorage.setItem('userName', nextName);
+    setName(nextName);
+    emitNameChange(nextName);
   };
 
   const handleRestore = async () => {
@@ -126,9 +159,12 @@ export default function ProfileScreen() {
           onPress: async () => {
             try {
               await supabase.auth.signOut();
-              await AsyncStorage.setItem('authMode', 'offline');
+              // Keep authMode set to supabase so the app shows the auth screen
+              await AsyncStorage.setItem('authMode', 'supabase');
+              await AsyncStorage.removeItem('onboardingComplete');
               setHasSession(false);
-              router.replace('/welcome');
+              // Replace navigation to auth to avoid history clutter
+              router.replace('/auth');
             } catch (err) {
               console.warn('Sign out failed', err);
               Alert.alert('Sign out failed', 'Please try again.');
@@ -139,24 +175,64 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await syncExpenses();
+    } catch (error) {
+      console.warn('Refresh failed', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  // Auto-sync when authenticated
+  useAutoSync();
+
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: activeColors.background }]}> 
-      <View style={styles.container}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={activeColors.tint}
+            colors={[activeColors.tint]}
+          />
+        }
+      >
         <View style={styles.header}>
           <View style={[styles.avatar, { backgroundColor: `${activeColors.tint}20` }]}> 
             <Text style={[styles.avatarText, { color: activeColors.tint }]}> {name.trim()?.[0]?.toUpperCase() ?? 'U'} </Text>
           </View>
           <View style={styles.userInfo}>
             <Text style={[styles.label, { color: activeColors.icon }]}>Profile name</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: theme === 'light' ? '#F4F7FA' : '#23272B', color: activeColors.text, borderColor: activeColors.icon }]}
-              value={name}
-              onChangeText={setName}
-              onBlur={() => AsyncStorage.setItem('userName', name)}
-              placeholder="User"
-              placeholderTextColor={theme === 'light' ? '#8B97A4' : '#787D85'}
-            />
+            {hasSession ? (
+              <View style={[styles.input, styles.readOnlyInput, { backgroundColor: theme === 'light' ? '#EEF2F7' : '#1E2328', borderColor: activeColors.icon }]}> 
+                <Text style={[styles.readOnlyText, { color: activeColors.text }]}>{name || 'User'}</Text>
+              </View>
+            ) : (
+              <View style={styles.nameEditRow}>
+                <TextInput
+                  style={[styles.input, styles.nameInput, { backgroundColor: theme === 'light' ? '#F4F7FA' : '#23272B', color: activeColors.text, borderColor: activeColors.icon }]}
+                  value={draftName}
+                  onChangeText={setDraftName}
+                  placeholder="User"
+                  placeholderTextColor={theme === 'light' ? '#8B97A4' : '#787D85'}
+                />
+                <TouchableOpacity
+                  style={[styles.confirmButton, { backgroundColor: activeColors.tint }]}
+                  onPress={handleConfirmGuestName}
+                  accessibilityLabel="Confirm display name"
+                >
+                  <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
 
@@ -175,35 +251,39 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           ) : null}
 
-          <TouchableOpacity style={styles.option} activeOpacity={0.7}>
-            <View style={[styles.iconBox, { backgroundColor: theme === 'light' ? '#DEEBFF' : '#22272E' }]}> 
-              <Image source={settingsIcon} style={styles.icon} />
-            </View>
-            <View style={styles.optionText}> 
-              <Text style={[styles.optionTitle, { color: activeColors.text }]}>Settings</Text>
-              <Text style={[styles.optionSubtitle, { color: activeColors.icon }]}>Customize your preferences</Text>
-            </View>
-          </TouchableOpacity>
+          {/* {!hasSession ? (
+            <TouchableOpacity
+              style={[styles.option, isSyncing && styles.optionDisabled]}
+              activeOpacity={0.7}
+              onPress={handleSync}
+              disabled={isSyncing}
+            >
+              <View style={[styles.iconBox, { backgroundColor: theme === 'light' ? '#E2F1FF' : '#1E2C3A' }]}> 
+                {isSyncing ? (
+                  <></>
+                ) : (
+                  <Ionicons name="cloud-upload-outline" size={22} color={activeColors.tint} />
+                )}
+              </View>
+              <View style={styles.optionText}> 
+                <Text style={[styles.optionSubtitle, { color: activeColors.icon }]}>Save and sync your expenses to the cloud</Text>
+                {lastSyncedAt ? (
+                  <Text style={[styles.optionMeta, { color: activeColors.icon }]}>Last synced: {lastSyncedAt.toLocaleString('en-US')}</Text>
+                ) : null}
+              </View>
+            </TouchableOpacity>
+          ) : null} */}
 
-          <TouchableOpacity
-            style={[styles.option, isSyncing && styles.optionDisabled]}
-            activeOpacity={0.7}
-            onPress={handleSync}
-            disabled={isSyncing}
-          >
-            <View style={[styles.iconBox, { backgroundColor: theme === 'light' ? '#E2F1FF' : '#1E2C3A' }]}> 
-              {isSyncing ? (
-                <ActivityIndicator color={activeColors.tint} />
-              ) : (
-                <Ionicons name="cloud-upload-outline" size={22} color={activeColors.tint} />
-              )}
+           <TouchableOpacity style={styles.option} activeOpacity={0.7} onPress={() => setTheme(nextTheme)}>
+            <View style={[styles.iconBox, { backgroundColor: theme === 'light' ? '#FFF0C7' : '#2F2F35' }]}> 
+              <Text style={styles.themeIcon}>{theme === 'light' ? '☀️' : '🌙'}</Text>
             </View>
             <View style={styles.optionText}> 
-              <Text style={[styles.optionTitle, { color: activeColors.text }]}>Sync / Backup</Text>
-              <Text style={[styles.optionSubtitle, { color: activeColors.icon }]}>Save and sync your expenses to the cloud</Text>
-              {lastSyncedAt ? (
-                <Text style={[styles.optionMeta, { color: activeColors.icon }]}>Last synced: {lastSyncedAt.toLocaleString('en-US')}</Text>
-              ) : null}
+              <Text style={[styles.optionTitle, { color: activeColors.text }]}>Theme</Text>
+              <Text style={[styles.optionSubtitle, { color: activeColors.icon }]}>Switch to {nextTheme} mode</Text>
+            </View>
+            <View style={[styles.themeBadge, { backgroundColor: theme === 'light' ? '#E2E8F0' : '#23272E' }]}> 
+              <Text style={[styles.badgeText, { color: activeColors.text }]}> {theme === 'light' ? 'Light' : 'Dark'} </Text>
             </View>
           </TouchableOpacity>
 
@@ -230,37 +310,14 @@ export default function ProfileScreen() {
                 <Ionicons name="log-out-outline" size={22} color="#FFFFFF" />
               </View>
               <View style={styles.optionText}> 
-                <Text style={[styles.optionTitle, { color: '#FFFFFF' }]}>Sign out</Text>
-                <Text style={[styles.optionSubtitle, { color: '#FFFFFF' }]}>Sign out of your account</Text>
+                <Text style={[styles.optionTitle, { color: activeColors.text }]}>Sign out</Text>
+                <Text style={[styles.optionSubtitle, { color: activeColors.icon }]}>Sign out of your account</Text>
               </View>
             </TouchableOpacity>
           ) : null}
 
-          <TouchableOpacity style={styles.option} activeOpacity={0.7} onPress={() => setTheme(nextTheme)}>
-            <View style={[styles.iconBox, { backgroundColor: theme === 'light' ? '#FFF0C7' : '#2F2F35' }]}> 
-              <Text style={styles.themeIcon}>{theme === 'light' ? '☀️' : '🌙'}</Text>
-            </View>
-            <View style={styles.optionText}> 
-              <Text style={[styles.optionTitle, { color: activeColors.text }]}>Theme</Text>
-              <Text style={[styles.optionSubtitle, { color: activeColors.icon }]}>Switch to {nextTheme} mode</Text>
-            </View>
-            <View style={[styles.themeBadge, { backgroundColor: theme === 'light' ? '#E2E8F0' : '#23272E' }]}> 
-              <Text style={[styles.badgeText, { color: activeColors.text }]}> {theme === 'light' ? 'Light' : 'Dark'} </Text>
-            </View>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.option} activeOpacity={0.7} onPress={async () => { await AsyncStorage.removeItem('userName'); alert('Onboarding reset. Reload the app to see it.'); }}>
-            <View style={[styles.iconBox, { backgroundColor: '#FF6B6B' }]}> 
-              <Ionicons name="refresh-outline" size={22} color="#FFFFFF" />
-            </View>
-            <View style={styles.optionText}> 
-              <Text style={[styles.optionTitle, { color: '#FFFFFF' }]}>Reset Onboarding</Text>
-              <Text style={[styles.optionSubtitle, { color: '#FFFFFF' }]}>Clear name and restart onboarding</Text>
-            </View>
-          </TouchableOpacity>
         </View>
-
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -271,6 +328,8 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
+  },
+  content: {
     padding: 20,
   },
   header: {
@@ -309,6 +368,28 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
+  nameEditRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  nameInput: {
+    flex: 1,
+  },
+  confirmButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  readOnlyInput: {
+    justifyContent: 'center',
+  },
+  readOnlyText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
   sectionTitle: {
     fontSize: 16,
     fontWeight: '700',
@@ -338,11 +419,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 14,
-  },
-  icon: {
-    width: 22,
-    height: 22,
-    resizeMode: 'contain',
   },
   themeIcon: {
     fontSize: 20,

@@ -1,12 +1,15 @@
+import { emitExpenseChange } from '@/utils/expenseChangeEmitter';
 import {
-  createExpense as createLocalExpense,
-  deleteExpenseLocal,
-  getAllExpensesForUser,
-  getExpenseByIdForUser,
-  updateExpenseLocal,
+    createExpense as createLocalExpense,
+    deleteExpenseLocal,
+    getAllExpensesForUser,
+    getExpenseByIdForUser,
+    markAsSynced,
+    updateExpenseLocal,
 } from '@/utils/sqlite';
 import { supabase } from '@/utils/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -33,11 +36,12 @@ async function getCurrentUserId(): Promise<string | null> {
 
 export async function createExpense(payload: CreatePayload) {
   const userId = (await getCurrentUserId()) ?? (await getLocalUserId());
+  const isAuthenticated = await getCurrentUserId();
 
   const id = uuidv4();
   const now = new Date().toISOString();
 
-  await createLocalExpense({
+  const expense = {
     id,
     user_id: userId,
     amount: payload.amount,
@@ -45,7 +49,28 @@ export async function createExpense(payload: CreatePayload) {
     note: payload.note ?? null,
     created_at: now,
     updated_at: now,
-  } as any);
+  };
+
+  // Save locally
+  await createLocalExpense(expense as any);
+
+  // Try to sync to Supabase if authenticated and online
+  if (isAuthenticated) {
+    try {
+      const netState = await NetInfo.fetch();
+      if (netState.isConnected) {
+        const { error } = await supabase.from('expenses').insert([expense]);
+        if (!error) {
+          await markAsSynced(id);
+        }
+      }
+    } catch (err) {
+      console.warn('Direct Supabase upload failed, will retry on sync', err);
+    }
+  }
+
+  // Emit event for auto-sync
+  emitExpenseChange({ type: 'create', id });
 
   return id;
 }
@@ -61,14 +86,57 @@ export async function getExpense(id: string) {
 }
 
 export async function updateExpense(id: string, changes: Partial<CreatePayload>) {
-  await updateExpenseLocal(id, {
+  const isAuthenticated = await getCurrentUserId();
+  const now = new Date().toISOString();
+
+  const updated = {
     ...changes,
-    updated_at: new Date().toISOString(),
-  } as any);
+    updated_at: now,
+  };
+
+  // Update locally
+  await updateExpenseLocal(id, updated as any);
+
+  // Try to sync to Supabase if authenticated and online
+  if (isAuthenticated) {
+    try {
+      const netState = await NetInfo.fetch();
+      if (netState.isConnected) {
+        const { error } = await supabase
+          .from('expenses')
+          .update(updated)
+          .eq('id', id);
+        if (!error) {
+          await markAsSynced(id);
+        }
+      }
+    } catch (err) {
+      console.warn('Direct Supabase update failed, will retry on sync', err);
+    }
+  }
+
+  // Emit event for auto-sync
+  emitExpenseChange({ type: 'update', id });
 }
 
 export async function deleteExpense(id: string) {
-  // delete locally
+  const isAuthenticated = await getCurrentUserId();
+
+  // Delete locally
   await deleteExpenseLocal(id);
+
+  // Try to sync to Supabase if authenticated and online
+  if (isAuthenticated) {
+    try {
+      const netState = await NetInfo.fetch();
+      if (netState.isConnected) {
+        await supabase.from('expenses').delete().eq('id', id);
+      }
+    } catch (err) {
+      console.warn('Direct Supabase delete failed, will retry on sync', err);
+    }
+  }
+
+  // Emit event for auto-sync
+  emitExpenseChange({ type: 'delete', id });
 }
-// create CRUD

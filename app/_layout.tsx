@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
+import ToastHost from '@/components/toast';
+import { useAutoSync } from '@/hooks/useAutoSync';
 import { AppThemeProvider } from '@/theme/ThemeContext';
 import { supabase } from '@/utils/supabase';
 
@@ -17,6 +19,9 @@ export default function RootLayout() {
   const [hasSession, setHasSession] = useState(false);
   const segments = useSegments();
   const router = useRouter();
+
+  // Enable auto-sync for authenticated users
+  useAutoSync();
 
   useEffect(() => {
     const init = async () => {
@@ -47,34 +52,39 @@ export default function RootLayout() {
     const checkAndNavigate = async () => {
       const inAuth = segments[0] === 'auth';
       const inOnboarding = segments[0] === 'onboarding';
-      const inWelcome = segments[0] === 'welcome';
-      const [authMode, name] = await Promise.all([
+      const inGuestProfile = segments[0] === 'guest-profile';
+      const [authMode, name, onboardingDone] = await Promise.all([
         AsyncStorage.getItem('authMode'),
         AsyncStorage.getItem('userName'),
+        AsyncStorage.getItem('onboardingComplete'),
       ]);
       const isOnboarded = !!name;
+      const hasCompletedOnboarding = onboardingDone === '1';
 
-      if (!authMode) {
-        if (!inWelcome) router.replace('/welcome');
+      if (!hasCompletedOnboarding) {
+        if (!inOnboarding) router.replace('/onboarding');
         return;
       }
 
       if (authMode === 'offline') {
-        if (!isOnboarded && !inOnboarding) {
-          router.replace('/onboarding');
+        if (!isOnboarded && !inGuestProfile) {
+          router.replace('/guest-profile');
           return;
         }
-        if (isOnboarded && (inAuth || inOnboarding || inWelcome)) {
+        if (isOnboarded && (inAuth || inOnboarding || inGuestProfile)) {
           router.replace('/(tabs)');
         }
         return;
       }
 
+      if (!authMode) {
+        if (!inAuth) router.replace('/auth');
+        return;
+      }
+
       if (!hasSession && !inAuth) {
         router.replace('/auth');
-      } else if (hasSession && !isOnboarded && !inOnboarding) {
-        router.replace('/onboarding');
-      } else if (hasSession && isOnboarded && (inAuth || inOnboarding || inWelcome)) {
+      } else if (hasSession && (inAuth || inOnboarding || inGuestProfile)) {
         router.replace('/(tabs)');
       }
     };
@@ -89,9 +99,11 @@ export default function RootLayout() {
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="auth" options={{ headerShown: false }} />
-          <Stack.Screen name="welcome" options={{ headerShown: false }} />
+          <Stack.Screen name="onboarding" options={{ headerShown: false }} />
+          <Stack.Screen name="guest-profile" options={{ headerShown: false }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
         </Stack>
+        <ToastHost />
         <StatusBar style="auto" />
       </AppThemeProvider>
     </GestureHandlerRootView>

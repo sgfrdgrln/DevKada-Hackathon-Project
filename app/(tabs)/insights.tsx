@@ -1,11 +1,13 @@
-import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
-import { getExpenseInsights, ExpenseInsight } from '@/services/insightService';
+import { useAutoSync } from '@/hooks/useAutoSync';
+import { ExpenseInsight, getExpenseInsights } from '@/services/insightService';
+import { syncExpenses } from '@/services/syncService';
+import { Ionicons } from '@expo/vector-icons';
+import { Link } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type FilterRange = 'daily' | 'weekly' | 'monthly';
 
@@ -36,25 +38,41 @@ export default function InsightsScreen() {
   const [insightData, setInsightData] = useState<ExpenseInsight | null>(null);
   const [loadingInsights, setLoadingInsights] = useState(true);
   const [longPressedBar, setLongPressedBar] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const theme = useColorScheme() ?? 'light';
   const activeColors = Colors[theme];
 
-  useEffect(() => {
-    async function loadInsights() {
-      setLoadingInsights(true);
-      try {
-        const data = await getExpenseInsights(selectedRange);
-        setInsightData(data);
-      } catch (error) {
-        console.warn('Insight load failed', error);
-        setInsightData(null);
-      } finally {
-        setLoadingInsights(false);
-      }
+  async function loadInsights() {
+    setLoadingInsights(true);
+    try {
+      const data = await getExpenseInsights(selectedRange);
+      setInsightData(data);
+    } catch (error) {
+      console.warn('Insight load failed', error);
+      setInsightData(null);
+    } finally {
+      setLoadingInsights(false);
     }
+  }
 
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await syncExpenses();
+      await loadInsights();
+    } catch (error) {
+      console.warn('Refresh failed', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [selectedRange]);
+
+  useEffect(() => {
     loadInsights();
   }, [selectedRange]);
+
+  // Auto-sync when authenticated
+  useAutoSync();
 
   const chartValues = insightData?.chartValues ?? [];
   const chartLabels = insightData?.chartLabels ?? [];
@@ -81,7 +99,18 @@ export default function InsightsScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: activeColors.background }]}> 
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={activeColors.tint}
+            colors={[activeColors.tint]}
+          />
+        }
+      >
         <Text style={[styles.heading, { color: activeColors.tint }]}>Insights</Text>
         <View style={[styles.statusBar, { width: statusBarWidth, backgroundColor: theme === 'light' ? '#F7F5FF' : '#23202F' }] }>
           <Text style={[styles.statusText, { color: activeColors.icon }]} numberOfLines={2} ellipsizeMode="tail">

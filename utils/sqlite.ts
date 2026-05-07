@@ -25,6 +25,14 @@ async function initDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
       created_at TEXT,
       updated_at TEXT,
       is_synced INTEGER DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS monthly_income (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      amount REAL,
+      created_at TEXT,
+      updated_at TEXT,
+      is_synced INTEGER DEFAULT 0
     );`
   );
 }
@@ -212,4 +220,74 @@ export async function reassignLocalUserId(oldUserId: string, newUserId: string) 
     'UPDATE expenses SET user_id = ?, is_synced = 0 WHERE user_id = ?',
     [newUserId, oldUserId]
   );
+}
+
+export async function setMonthlyIncomeLocal(id: string, userId: string, amount: number | null) {
+  const now = new Date().toISOString();
+  const db = await getDb();
+
+  if (amount === null) {
+    await runSql('DELETE FROM monthly_income WHERE id = ?', [id]);
+    return;
+  }
+
+  const existing = await db.getFirstAsync<{ id: string }>(
+    'SELECT id FROM monthly_income WHERE id = ?',
+    [id]
+  );
+
+  if (existing) {
+    await runSql(
+      'UPDATE monthly_income SET amount = ?, updated_at = ?, is_synced = 0 WHERE id = ?',
+      [amount, now, id]
+    );
+  } else {
+    await runSql(
+      'INSERT INTO monthly_income (id, user_id, amount, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, ?, 0)',
+      [id, userId, amount, now, now]
+    );
+  }
+}
+
+export async function getMonthlyIncomeForUser(userId: string): Promise<{ id: string; amount: number; is_synced: 0 | 1 } | null> {
+  const db = await getDb();
+  return db.getFirstAsync(
+    'SELECT id, amount, is_synced FROM monthly_income WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1',
+    [userId]
+  );
+}
+
+export async function getUnsyncedMonthlyIncome(userId: string): Promise<{ id: string; user_id: string; amount: number; created_at: string; updated_at: string }[]> {
+  const db = await getDb();
+  return db.getAllAsync(
+    'SELECT id, user_id, amount, created_at, updated_at FROM monthly_income WHERE user_id = ? AND is_synced = 0',
+    [userId]
+  );
+}
+
+export async function markMonthlyIncomeAsSynced(id: string) {
+  await runSql('UPDATE monthly_income SET is_synced = 1 WHERE id = ?', [id]);
+}
+
+export async function upsertMonthlyIncome(remote: { id: string; user_id: string; amount: number; created_at: string; updated_at: string }) {
+  const db = await getDb();
+  const existing = await db.getFirstAsync<{ updated_at: string }>(
+    'SELECT updated_at FROM monthly_income WHERE id = ?',
+    [remote.id]
+  );
+
+  if (!existing) {
+    await runSql(
+      'INSERT INTO monthly_income (id, user_id, amount, created_at, updated_at, is_synced) VALUES (?, ?, ?, ?, ?, 1)',
+      [remote.id, remote.user_id, remote.amount, remote.created_at, remote.updated_at]
+    );
+    return;
+  }
+
+  if (new Date(remote.updated_at) > new Date(existing.updated_at)) {
+    await runSql(
+      'UPDATE monthly_income SET user_id = ?, amount = ?, created_at = ?, updated_at = ?, is_synced = 1 WHERE id = ?',
+      [remote.user_id, remote.amount, remote.created_at, remote.updated_at, remote.id]
+    );
+  }
 }

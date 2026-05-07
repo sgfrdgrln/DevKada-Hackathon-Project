@@ -70,3 +70,50 @@ export async function syncExpenses() {
     return { status: 'error' as const };
   }
 }
+
+export async function pushUnsyncedMonthlyIncome(userId: string) {
+  try {
+    const { getUnsyncedMonthlyIncome, markMonthlyIncomeAsSynced } = await import('@/utils/sqlite');
+    const unsynced = await getUnsyncedMonthlyIncome(userId);
+    if (!unsynced.length) return;
+
+    for (const record of unsynced) {
+      const { error } = await supabase.from('monthly_income').upsert({
+        id: record.id,
+        user_id: userId,
+        amount: record.amount,
+        created_at: record.created_at,
+        updated_at: record.updated_at,
+      });
+      if (!error) {
+        await markMonthlyIncomeAsSynced(record.id);
+      }
+    }
+  } catch (err) {
+    console.warn('pushUnsyncedMonthlyIncome failed', err);
+  }
+}
+
+export async function pullMonthlyIncome(userId: string) {
+  try {
+    const { upsertMonthlyIncome } = await import('@/utils/sqlite');
+    const { data, error } = await supabase
+      .from('monthly_income')
+      .select('*')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.warn('pullMonthlyIncome error', error);
+      return;
+    }
+
+    if (data) {
+      await upsertMonthlyIncome(data);
+    }
+  } catch (err) {
+    console.warn('pullMonthlyIncome failed', err);
+  }
+}

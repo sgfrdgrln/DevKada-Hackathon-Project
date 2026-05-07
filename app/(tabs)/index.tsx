@@ -1,6 +1,13 @@
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useAutoSync } from '@/hooks/useAutoSync';
+import { useMonthlyIncomeAutoSync } from '@/hooks/useMonthlyIncomeAutoSync';
+import { listExpenses } from '@/services/expenseService';
 import { extractReceiptData } from '@/services/extractService';
+import { syncExpenses } from '@/services/syncService';
+import { subscribeToNameChange } from '@/utils/nameChangeEmitter';
+import type { Expense as DbExpense } from '@/utils/sqlite';
+import { supabase } from '@/utils/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Camera } from 'expo-camera';
@@ -8,27 +15,43 @@ import * as ImagePicker from 'expo-image-picker';
 import { Link, useFocusEffect, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { listExpenses } from '@/services/expenseService';
-import type { Expense as DbExpense } from '@/utils/sqlite';
 
 export default function HomeScreen() {
   const [fabOpen, setFabOpen] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [expenses, setExpenses] = useState<DbExpense[]>([]);
   const [name, setName] = useState('User');
+  const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
   const theme = useColorScheme() ?? 'light';
   const activeColors = Colors[theme];
+  const [monthlyIncome, setMonthlyIncome] = useState<number | null>(null);
+  const [editingIncome, setEditingIncome] = useState(false);
+  const [incomeInput, setIncomeInput] = useState('');
 
   useEffect(() => {
     const loadData = async () => {
-      const storedName = await AsyncStorage.getItem('userName');
-      if (storedName) setName(storedName);
+      const { data } = await supabase.auth.getUser();
+      const displayName = data.user?.user_metadata?.display_name;
+      if (displayName && typeof displayName === 'string') {
+        setName(displayName);
+      } else {
+        const storedName = await AsyncStorage.getItem('userName');
+        if (storedName) setName(storedName);
+      }
 
       const rows = await listExpenses();
       setExpenses(rows);
+      // load monthly income
+      try {
+        const { getMonthlyIncome } = await import('@/services/monthlyIncomeService');
+        const saved = await getMonthlyIncome();
+        setMonthlyIncome(saved);
+      } catch (err) {
+        console.warn('load monthly income failed', err);
+      }
     };
 
     loadData();
@@ -37,8 +60,14 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       const loadData = async () => {
-        const storedName = await AsyncStorage.getItem('userName');
-        if (storedName) setName(storedName);
+        const { data } = await supabase.auth.getUser();
+        const displayName = data.user?.user_metadata?.display_name;
+        if (displayName && typeof displayName === 'string') {
+          setName(displayName);
+        } else {
+          const storedName = await AsyncStorage.getItem('userName');
+          if (storedName) setName(storedName);
+        }
 
         const rows = await listExpenses();
         setExpenses(rows);
@@ -47,6 +76,48 @@ export default function HomeScreen() {
       loadData();
     }, [])
   );
+
+  useEffect(() => {
+    const unsubscribe = subscribeToNameChange((nextName) => {
+      if (nextName?.trim()) {
+        setName(nextName.trim());
+      }
+    });
+
+    return unsubscribe;
+  }, []);
+
+  // Enable auto-sync for expenses and monthly income
+  useAutoSync();
+  useMonthlyIncomeAutoSync();
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      // Sync all data if authenticated
+      await syncExpenses();
+      
+      // Also sync monthly income
+      const { data, error } = await supabase.auth.getUser();
+      if (!error && data?.user?.id) {
+        const { pushUnsyncedMonthlyIncome, pullMonthlyIncome } = await import('@/services/monthlyIncomeService');
+        await pushUnsyncedMonthlyIncome(data.user.id);
+        await pullMonthlyIncome(data.user.id);
+      }
+      
+      // Reload local data
+      const rows = await listExpenses();
+      setExpenses(rows);
+      
+      const { getMonthlyIncome } = await import('@/services/monthlyIncomeService');
+      const saved = await getMonthlyIncome();
+      setMonthlyIncome(saved);
+    } catch (error) {
+      console.warn('Refresh failed', error);
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
 
 
 
@@ -105,6 +176,11 @@ export default function HomeScreen() {
     return new Date(expense.created_at) >= monthStart;
   });
 
+  const thisWeekTotal = thisWeekExpenses.reduce(
+  (sum, e) => sum + Number(e.amount || 0),
+  0
+);
+
   const weeklyCategoryData = groupExpensesByCategory(thisWeekExpenses);
 
   const monthlyCategoryData = groupExpensesByCategory(thisMonthExpenses);
@@ -155,23 +231,28 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: activeColors.background }]}>
       <StatusBar style={theme === 'dark' ? 'light' : 'dark'} />
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={activeColors.tint} />}
+      >
         <View style={styles.header}>
-          <View style={styles.avatarCircle}>
-            <Ionicons name="person-outline" size={16} color={activeColors.background === '#fff' ? '#000' : '#FFF'} />
+          <View style={styles.greetingArea}>
+            <Text style={[styles.greeting, { color: activeColors.text }]}>Hi, {name.trim() ? name.trim().split(' ')[0] : 'there'} 👋</Text>
+            <Text style={[styles.subheading, { color: activeColors.icon }]}>What's new?</Text>
           </View>
-          <View style={styles.textWrap}>
-            <Text style={[styles.greeting, { color: activeColors.text }]}>Hi {name}!</Text>
-            <Text style={[styles.heading, { color: activeColors.tint }]}>What’s new?</Text>
+          <View style={[styles.avatar, { backgroundColor: `${activeColors.tint}20` }]}>
+            <Text style={[styles.avatarText, { color: activeColors.tint }]}>
+              {name.trim()?.[0]?.toUpperCase() ?? 'U'}
+            </Text>
           </View>
         </View>
 
-        <Text style={[styles.sectionLabel, { color: activeColors.icon }]}>Expenses for this week</Text>
-
         <View style={styles.overviewRow}>
           <View style={styles.overviewLeft}>
-            <Text style={[styles.amountMain, { color: activeColors.text }]}>PHP 2,491.34</Text>
-            <Link href="/explore" asChild>
+             <Text style={[styles.subheading, { color: activeColors.icon }]}>Expense this week</Text>
+            <Text style={[styles.amountMain, { color: activeColors.text }]}>PHP {thisWeekTotal.toFixed(2)}</Text>
+            <Link href="/insights" asChild>
               <Pressable style={[styles.pillButton, { borderColor: activeColors.tint }]}>
                 <Text style={[styles.pillText, { color: activeColors.tint }]}>View insights</Text>
               </Pressable>
@@ -184,144 +265,202 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        <Modal animationType="fade" transparent visible={editingIncome} onRequestClose={() => setEditingIncome(false)}>
+          <View style={{flex:1, justifyContent:'center', alignItems:'center'}}>
+            <View style={[styles.modalCard, { width: '90%', padding: 16, borderRadius: 12, backgroundColor: theme === 'light' ? '#FFFFFF' : '#111015' }]}>
+              <Text style={{fontSize:16, fontWeight:'600', marginBottom:8, color: activeColors.text}}>Edit Monthly Income</Text>
+              <TextInput
+                value={incomeInput}
+                onChangeText={setIncomeInput}
+                keyboardType="decimal-pad"
+                placeholder="e.g. 14305.33"
+                placeholderTextColor={theme === 'light' ? '#8B97A4' : '#787D85'}
+                style={{borderWidth:1, borderColor: activeColors.icon, borderRadius:8, padding:10, color: activeColors.text, marginBottom:12}}
+              />
+              <View style={{flexDirection:'row', justifyContent:'flex-end', gap:8}}>
+                <TouchableOpacity onPress={() => setEditingIncome(false)} style={{paddingHorizontal:12, paddingVertical:8}}>
+                  <Text style={{color: activeColors.icon}}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={async () => {
+                  const parsed = Number(incomeInput);
+                  if (!Number.isFinite(parsed) || parsed < 0) {
+                    setIncomeInput('');
+                    setEditingIncome(false);
+                    return;
+                  }
+                  try {
+                    const { setMonthlyIncome: saveIncome } = await import('@/services/monthlyIncomeService');
+                    await saveIncome(parsed);
+                    setMonthlyIncome(parsed); // Update UI state immediately
+                    setIncomeInput('');
+                  } catch (err) {
+                    console.warn('save monthly income failed', err);
+                  } finally {
+                    setEditingIncome(false);
+                  }
+                }} style={{backgroundColor: activeColors.tint, paddingHorizontal:12, paddingVertical:8, borderRadius:8}}>
+                  <Text style={{color:'#fff'}}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
         <Text style={[styles.progressTitle, { color: activeColors.text }]}>Progress Report</Text>
         <Text style={[styles.progressText, { color: activeColors.icon }]}>
           You have gained 30% more expense in groceries in the last 2 weeks!
         </Text>
 
-        <View style={styles.metricRow}>
-          <View style={[styles.metricCard, { backgroundColor: theme === 'light' ? '#F7F8FA' : '#111015' }]}>
-            <View style={styles.metricHeader}>
-              <Ionicons name="wallet-outline" size={14} color={activeColors.tint} />
-              <Ionicons name="ellipsis-horizontal" size={14} color={activeColors.icon} />
+        {expenses.length > 0 ? (
+          <>
+            <View style={styles.metricRow}>
+              <View style={[styles.metricCard, { backgroundColor: theme === 'light' ? '#F7F8FA' : '#111015' }]}>
+                <View style={styles.metricHeader}>
+                  <Ionicons name="wallet-outline" size={14} color={activeColors.tint} />
+                  <Ionicons name="ellipsis-horizontal" size={14} color={activeColors.icon} />
+                </View>
+                <Text style={[styles.metricLabel, { color: activeColors.icon }]}>Monthly income</Text>
+                <TouchableOpacity onPress={() => {
+                  setIncomeInput(monthlyIncome !== null ? String(monthlyIncome.toFixed(2)) : '');
+                  setEditingIncome(true);
+                }}>
+                  <Text style={[styles.metricAmount, { color: activeColors.text }]}>{monthlyIncome !== null ? `PHP ${monthlyIncome.toFixed(2)}` : 'Not set'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={[styles.metricCard, { backgroundColor: theme === 'light' ? '#F7F8FA' : '#111015' }]}>
+                <View style={styles.metricHeader}>
+                  <Ionicons name="trending-down-outline" size={14} color={activeColors.tint} />
+                  <Ionicons name="ellipsis-horizontal" size={14} color={activeColors.icon} />
+                </View>
+                <Text style={[styles.metricLabel, { color: activeColors.icon }]}>Monthly Spending</Text>
+                <Text style={[styles.metricAmount, { color: activeColors.text }]}>PHP {thisMonthExpenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}</Text>
+              </View>
             </View>
-            <Text style={[styles.metricLabel, { color: activeColors.icon }]}>Monthly income</Text>
-            <Text style={[styles.metricAmount, { color: activeColors.text }]}>PHP 14,305.33</Text>
+
+            <Text style={[styles.monthLabel, { color: activeColors.icon }]}>This Week</Text>
+            {weeklyCategoryData.length > 0 ? (
+              weeklyCategoryData.map((item) => (
+                <View key={item.id} style={styles.expenseItem}>
+                  <View style={styles.expenseLeft}>
+                    <View
+                      style={[
+                        styles.expenseIconBox,
+                        { borderColor: activeColors.icon },
+                      ]}
+                    >
+                      <Ionicons
+                        name={item.icon as any}
+                        size={12}
+                        color={activeColors.tint}
+                      />
+                    </View>
+
+                    <View style={styles.expenseTextWrap}>
+                      <Text
+                        style={[
+                          styles.expenseTitle,
+                          { color: activeColors.text },
+                        ]}
+                      >
+                        {item.title}
+                      </Text>
+
+                      <Text
+                        style={[
+                          styles.expenseSubtitle,
+                          { color: activeColors.icon },
+                        ]}
+                      >
+                        {item.subtitle}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text
+                    style={[
+                      styles.expenseAmount,
+                      { color: activeColors.text },
+                    ]}
+                  >
+                    {item.amount}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <Text style={[styles.emptyText, { color: activeColors.icon }]}>No expenses yet</Text>
+            )}
+
+            <Text style={[styles.monthLabel, { color: activeColors.icon }]}>This Month</Text>
+            {monthlyCategoryData.length > 0 ? (
+              monthlyCategoryData.map((item) => (
+                <View key={item.id} style={styles.expenseItem}>
+                  <View style={styles.expenseLeft}>
+                    <View
+                      style={[
+                        styles.expenseIconBox,
+                        {
+                          backgroundColor:
+                            theme === 'light' ? '#E8EAF6' : '#2A253A',
+                          borderColor: activeColors.icon,
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={item.icon as any}
+                        size={12}
+                        color={activeColors.tint}
+                      />
+                    </View>
+
+                    <View style={styles.expenseTextWrap}>
+                      <Text
+                        style={[
+                          styles.expenseTitle,
+                          { color: activeColors.text },
+                        ]}
+                      >
+                        {item.title}
+                      </Text>
+
+                      <Text
+                        style={[
+                          styles.expenseSubtitle,
+                          { color: activeColors.icon },
+                        ]}
+                      >
+                        {item.subtitle}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text
+                    style={[
+                      styles.expenseAmount,
+                      { color: activeColors.text },
+                    ]}
+                  >
+                    {item.amount}
+                  </Text>
+                </View>
+              ))
+            ) : (
+              <Text style={[styles.emptyText, { color: activeColors.icon }]}>No expenses yet</Text>
+            )}
+
+            <Link href="/expenses" asChild>
+              <Pressable style={[styles.pillButtonSecondary, { borderColor: activeColors.tint }]}>
+                <Text style={[styles.pillText, { color: activeColors.tint }]}>View Expenses</Text>
+              </Pressable>
+            </Link>
+          </>
+        ) : (
+          <View style={styles.noExpensesContainer}>
+            <Ionicons name="wallet-outline" size={48} color={activeColors.icon} />
+            <Text style={[styles.noExpensesText, { color: activeColors.text }]}>No expenses yet</Text>
+            <Text style={[styles.noExpensesSubtext, { color: activeColors.icon }]}>Start tracking your spending by creating your first expense</Text>
           </View>
-
-          <View style={[styles.metricCard, { backgroundColor: theme === 'light' ? '#F7F8FA' : '#111015' }]}>
-            <View style={styles.metricHeader}>
-              <Ionicons name="trending-down-outline" size={14} color={activeColors.tint} />
-              <Ionicons name="ellipsis-horizontal" size={14} color={activeColors.icon} />
-            </View>
-            <Text style={[styles.metricLabel, { color: activeColors.icon }]}>Monthly Spending</Text>
-            <Text style={[styles.metricAmount, { color: activeColors.text }]}>PHP 8,305.33</Text>
-          </View>
-        </View>
-
-        <Text style={[styles.monthLabel, { color: activeColors.icon }]}>
-  This Week
-</Text>
-
-{weeklyCategoryData.map((item) => (
-  <View key={item.id} style={styles.expenseItem}>
-    <View style={styles.expenseLeft}>
-      <View
-        style={[
-          styles.expenseIconBox,
-          { borderColor: activeColors.icon },
-        ]}
-      >
-        <Ionicons
-          name={item.icon as any}
-          size={12}
-          color={activeColors.tint}
-        />
-      </View>
-
-      <View style={styles.expenseTextWrap}>
-        <Text
-          style={[
-            styles.expenseTitle,
-            { color: activeColors.text },
-          ]}
-        >
-          {item.title}
-        </Text>
-
-        <Text
-          style={[
-            styles.expenseSubtitle,
-            { color: activeColors.icon },
-          ]}
-        >
-          {item.subtitle}
-        </Text>
-      </View>
-    </View>
-
-    <Text
-      style={[
-        styles.expenseAmount,
-        { color: activeColors.text },
-      ]}
-    >
-      {item.amount}
-    </Text>
-  </View>
-))}
-
-<Text style={[styles.monthLabel, { color: activeColors.icon }]}>
-  This Month
-</Text>
-
-{monthlyCategoryData.map((item) => (
-  <View key={item.id} style={styles.expenseItem}>
-    <View style={styles.expenseLeft}>
-      <View
-        style={[
-          styles.expenseIconBox,
-          {
-            backgroundColor:
-              theme === 'light' ? '#E8EAF6' : '#2A253A',
-            borderColor: activeColors.icon,
-          },
-        ]}
-      >
-        <Ionicons
-          name={item.icon as any}
-          size={12}
-          color={activeColors.tint}
-        />
-      </View>
-
-      <View style={styles.expenseTextWrap}>
-        <Text
-          style={[
-            styles.expenseTitle,
-            { color: activeColors.text },
-          ]}
-        >
-          {item.title}
-        </Text>
-
-        <Text
-          style={[
-            styles.expenseSubtitle,
-            { color: activeColors.icon },
-          ]}
-        >
-          {item.subtitle}
-        </Text>
-      </View>
-    </View>
-
-    <Text
-      style={[
-        styles.expenseAmount,
-        { color: activeColors.text },
-      ]}
-    >
-      {item.amount}
-    </Text>
-  </View>
-))}
-
-        <Link href="/expenses" asChild>
-          <Pressable style={[styles.pillButtonSecondary, { borderColor: activeColors.tint }]}>
-            <Text style={[styles.pillText, { color: activeColors.tint }]}>View Expenses</Text>
-          </Pressable>
-        </Link>
+        )}
       </ScrollView>
 
       {isExtracting ? (
@@ -385,9 +524,37 @@ const styles = StyleSheet.create({
   },
   header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 24,
+    gap: 12,
+  },
+  greetingArea: {
+    flex: 1,
+  },
+  greeting: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 6,
+    lineHeight: 30,
+  },
+  subheading: {
+    color: '#C3C3CD',
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  avatar: {
+    width: 100,
+    height: 100,
+    borderRadius: 32,
     alignItems: 'center',
-    marginBottom: 14,
-    gap: 8,
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  avatarText: {
+    fontSize: 42,
+    fontWeight: '700',
   },
   textWrap: {
     flex: 1,
@@ -400,17 +567,6 @@ const styles = StyleSheet.create({
     borderColor: '#D8D8D8',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  greeting: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 2,
-  },
-  heading: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
   },
   sectionLabel: {
     color: '#C3C3CD',
@@ -482,7 +638,7 @@ const styles = StyleSheet.create({
     color: '#723FEB',
     fontSize: 12,
     fontWeight: '600',
-    marginTop: 6,
+    marginTop: 16,
     marginBottom: 4,
   },
   progressText: {
@@ -490,11 +646,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     lineHeight: 14,
     maxWidth: 180,
+    marginBottom: 16,
   },
   metricRow: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 12,
+    marginBottom: 16,
   },
   metricCard: {
     flex: 1,
@@ -519,17 +676,38 @@ const styles = StyleSheet.create({
     lineHeight: 30,
   },
   monthLabel: {
-    marginTop: 12,
-    marginBottom: 8,
+    marginTop: 16,
+    marginBottom: 10,
     color: '#8E8E98',
-    fontSize: 18,
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '600',
   },
   expenseItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 9,
+    marginBottom: 8,
+  },
+  emptyText: {
+    fontSize: 13,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    paddingVertical: 12,
+  },
+  noExpensesContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    gap: 12,
+  },
+  noExpensesText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  noExpensesSubtext: {
+    fontSize: 12,
+    textAlign: 'center',
+    maxWidth: 240,
   },
   expenseLeft: {
     flexDirection: 'row',
@@ -619,5 +797,8 @@ const styles = StyleSheet.create({
   },
   extractingText: {
     fontSize: 12,
+  },
+  modalCard: {
+    minWidth: 280,
   },
 });

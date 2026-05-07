@@ -1,20 +1,17 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Image, SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Image, SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const logo = require('../assets/logo.png');
 
 export default function OnboardingScreen() {
   const [currentTab, setCurrentTab] = useState(0);
-  const [name, setName] = useState('');
   const router = useRouter();
 
   const handleFinish = async () => {
-    if (name.trim()) {
-      await AsyncStorage.setItem('userName', name.trim());
-      router.replace('/(tabs)');
-    }
+    await AsyncStorage.setItem('onboardingComplete', '1');
+    router.replace('/auth');
   };
 
   const renderTab = () => {
@@ -25,7 +22,7 @@ export default function OnboardingScreen() {
             <Text style={styles.title}>Welcome to Tracksy</Text>
             <Text style={styles.subtitle}>Your personal expense tracker</Text>
             <TouchableOpacity style={styles.button} onPress={() => setCurrentTab(1)}>
-              <Text style={styles.buttonText}>Get Started</Text>
+              <Text style={styles.buttonText}>Next</Text>
             </TouchableOpacity>
           </View>
         );
@@ -46,20 +43,9 @@ export default function OnboardingScreen() {
           <View style={styles.tabContainer}>
             <Image source={logo} style={styles.logo} />
             <Text style={styles.appName}>Tracksy</Text>
-            <Text style={styles.label}>What’s your name?</Text>
-            <TextInput
-              style={styles.input}
-              value={name}
-              onChangeText={setName}
-              placeholder="Enter your name"
-              placeholderTextColor="#888"
-            />
-            <TouchableOpacity
-              style={[styles.button, !name.trim() && styles.buttonDisabled]}
-              onPress={handleFinish}
-              disabled={!name.trim()}
-            >
-              <Text style={styles.buttonText}>Finish</Text>
+            <Text style={styles.description}>Get started now and choose sign in or continue as guest.</Text>
+            <TouchableOpacity style={styles.button} onPress={handleFinish}>
+              <Text style={styles.buttonText}>Get Started</Text>
             </TouchableOpacity>
           </View>
         );
@@ -124,16 +110,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#fff',
     marginBottom: 10,
-  },
-  input: {
-    width: '100%',
-    borderWidth: 1,
-    borderColor: '#fff',
-    borderRadius: 8,
-    padding: 15,
-    fontSize: 16,
-    color: '#fff',
-    marginBottom: 30,
   },
   button: {
     backgroundColor: '#723FEB',
