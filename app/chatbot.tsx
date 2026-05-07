@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '@/constants/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { listExpenses } from '@/services/expenseService';
 
 type ChatMessage = {
   id: string;
@@ -30,6 +31,30 @@ const groq = new OpenAI({
 
 const GEMINI_API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
 const GEMINI_ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+
+const isExpenseQuestion = (text: string) => {
+  const normalized = text.toLowerCase();
+  return (
+    normalized.includes('current expense') ||
+    normalized.includes('my current expense') ||
+    normalized.includes('how much have i spent') ||
+    normalized.includes('what is my spending') ||
+    normalized.includes('total expenses') ||
+    normalized.includes('current spending')
+  );
+};
+
+const formatExpenseReply = async () => {
+  const expenses = await listExpenses();
+  const total = expenses.reduce((sum, expense) => sum + Number(expense.amount ?? 0), 0);
+
+  if (expenses.length === 0) {
+    return 'You have no recorded expenses yet, so your current total expense is PHP 0.00. Add some entries and ask again for a quick update. I can help summarize your spending when you have data.';
+  }
+
+  const formattedTotal = total.toFixed(2);
+  return `Your current total expense is PHP ${formattedTotal}. This includes ${expenses.length} recorded items. Keep asking if you want a category breakdown or budget insight.`;
+};
 
 export default function ChatbotScreen() {
   const theme = useColorScheme() ?? 'light';
@@ -70,41 +95,48 @@ export default function ChatbotScreen() {
   };
 
   const sendMessage = async () => {
-  const text = input.trim();
-  if (!text) return;
+    const text = input.trim();
+    if (!text) return;
 
-  setError(null);
-  appendMessage('user', text);
-  setInput('');
-  setLoading(true);
+    setError(null);
+    appendMessage('user', text);
+    setInput('');
+    setLoading(true);
 
-  try {
-    const completion = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant', // fast + free tier
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a helpful finance assistant. Help users understand expenses and budgets.',
-        },
-        ...messages.map((m) => ({
-          role: m.role,
-          content: m.text,
-        })),
-        {
-          role: 'user',
-          content: text,
-        },
-      ],
-    });
+    try {
+      let reply: string;
 
-    const reply =
-      completion.choices?.[0]?.message?.content ||
-      'I could not generate a reply.';
+      if (isExpenseQuestion(text)) {
+        reply = await formatExpenseReply();
+      } else {
+        const completion = await groq.chat.completions.create({
+          model: 'llama-3.1-8b-instant', // fast + free tier
+          messages: [
+            {
+              role: 'system',
+              content:
+                'You are a helpful finance assistant. Help users understand expenses and budgets. Always answer in 3 to 4 sentences only, using clear and concise language.',
+            },
+            ...messages.map((m) => ({
+              role: m.role,
+              content: m.text,
+            })),
+            {
+              role: 'user',
+              content: text,
+            },
+          ],
+        });
 
-    setCurrentReply(reply);
-    setTypingIndex(0);
-    setIsTyping(true);
-  } catch (err: any) {
+        reply =
+          completion.choices?.[0]?.message?.content ||
+          'I could not generate a reply.';
+      }
+
+      setCurrentReply(reply);
+      setTypingIndex(0);
+      setIsTyping(true);
+    } catch (err: any) {
     console.error(err);
     setError(err.message || 'Groq request failed');
     appendMessage('assistant', 'There was an error contacting the chatbot.');
